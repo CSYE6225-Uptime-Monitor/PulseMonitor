@@ -1,0 +1,6 @@
+docs/
+.claude/
+backend/.env
+backend/node_modules/
+frontend/.env
+frontend/node_modules/
