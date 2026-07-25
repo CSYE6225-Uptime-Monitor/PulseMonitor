@@ -41,7 +41,17 @@ bash tests/structure.sh           # module scaffolding check
 ## Enabling remote state (future sprint)
 
 Remote state is written but **not applied** yet. When ready:
+## Remote state (bootstrapped)
 
+Bootstrap applied. Deployed resources:
+
+| Resource | Name | ARN |
+|---|---|---|
+| S3 bucket | `pulsemonitor-tfstate` | `arn:aws:s3:::pulsemonitor-tfstate` |
+| DynamoDB table | `pulsemonitor-tf-locks` | `arn:aws:dynamodb:us-east-1:713545429375:table/pulsemonitor-tf-locks` |
+
+Region: `us-east-1`. Versioning and AES256 encryption confirmed on the bucket;
+public access fully blocked.
 ```bash
 # 1. Create the state bucket + lock table (edit state_bucket_name first — must be globally unique)
 cd infrastructure/bootstrap
