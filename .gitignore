@@ -2,5 +2,6 @@ docs/
 .claude/
 backend/.env
 backend/node_modules/
+backend/coverage/
 frontend/.env
 frontend/node_modules/
