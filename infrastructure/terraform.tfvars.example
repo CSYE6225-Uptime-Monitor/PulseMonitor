@@ -1,0 +1,13 @@
+# Example variable values. Copy to terraform.tfvars and adjust.
+# terraform.tfvars is gitignored (may contain environment-specific values).
+
+aws_region         = "us-east-1"
+project_name       = "pulsemonitor"
+environment        = "dev"
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b"]
+domain_name        = "pulsemonitor.online"
+
+tags = {
+  Owner = "your-name"
+}
