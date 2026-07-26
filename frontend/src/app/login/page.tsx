@@ -2,12 +2,13 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth";
+import { useAuth, useRedirectIfAuthenticated } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
+  useRedirectIfAuthenticated();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -18,7 +19,7 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await login(form);
-      router.push("/account");
+      router.push("/dashboard");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Invalid email or password.");
     } finally {

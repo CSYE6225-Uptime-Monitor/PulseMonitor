@@ -2,12 +2,13 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth";
+import { useAuth, useRedirectIfAuthenticated } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 
 export default function SignupPage() {
   const router = useRouter();
   const { signup } = useAuth();
+  useRedirectIfAuthenticated();
   const [form, setForm] = useState({ email: "", password: "", first_name: "", last_name: "" });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -24,7 +25,7 @@ export default function SignupPage() {
     setSubmitting(true);
     try {
       await signup(form);
-      router.push("/account");
+      router.push("/dashboard");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
     } finally {

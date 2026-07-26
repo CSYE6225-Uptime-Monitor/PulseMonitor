@@ -1,19 +1,13 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth";
+import { useAuth, useRequireAuth } from "@/lib/auth";
 import { api, ApiError, type User } from "@/lib/api";
 
 export default function AccountPage() {
-  const router = useRouter();
-  const { user, loading, logout } = useAuth();
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace("/login");
-    }
-  }, [user, loading, router]);
+  const { user, loading } = useRequireAuth();
+  const { logout } = useAuth();
 
   if (loading || !user) {
     return <p className="p-8 text-zinc-600 dark:text-zinc-400">Loading...</p>;
@@ -61,6 +55,10 @@ function AccountForm({ user, onLogout }: { user: User; onLogout: () => Promise<v
           Log out
         </button>
       </div>
+
+      <a href="/dashboard" className="block text-sm font-medium text-zinc-950 underline dark:text-zinc-50">
+        Back to dashboard
+      </a>
 
       <p className="text-sm text-zinc-600 dark:text-zinc-400">{user.email}</p>
 

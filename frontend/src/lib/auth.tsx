@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { api, type User } from "./api";
 
 interface SignupInput {
@@ -82,4 +83,30 @@ export function useAuth(): AuthContextValue {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return ctx;
+}
+
+/** Redirects to /login once auth state resolves and no user is present. */
+export function useRequireAuth(): { user: User | null; loading: boolean } {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/login");
+    }
+  }, [user, loading, router]);
+
+  return { user, loading };
+}
+
+/** Redirects to /dashboard once auth state resolves and a user is present. */
+export function useRedirectIfAuthenticated(): void {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && user) {
+      router.replace("/dashboard");
+    }
+  }, [user, loading, router]);
 }
