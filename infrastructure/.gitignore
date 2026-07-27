@@ -1,0 +1,26 @@
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+tfplan
+*.tfplan
+
+# Local variable files (may hold environment-specific values) — keep the example.
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+# Backend partial-config with real values — keep the example.
+backend.hcl
+!backend.hcl.example
+
+# Secrets
+.env
+*.pem
