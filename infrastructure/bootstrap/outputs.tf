@@ -9,3 +9,12 @@ output "lock_table_name" {
   description = "DynamoDB table used for state locking."
   value       = aws_dynamodb_table.locks.name
 }
+output "state_bucket_arn" {
+  description = "ARN of the S3 bucket holding Terraform remote state."
+  value       = aws_s3_bucket.state.arn
+}
+
+output "lock_table_arn" {
+  description = "ARN of the DynamoDB table used for state locking."
+  value       = aws_dynamodb_table.locks.arn
+}
