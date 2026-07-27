@@ -2,6 +2,11 @@ docs/
 .claude/
 backend/.env
 backend/node_modules/
+backend/coverage/
 frontend/.env
 frontend/node_modules/
 .DS_Store
+frontend/.next/
+frontend/test-results/
+frontend/playwright-report/
+frontend/tsconfig.tsbuildinfo

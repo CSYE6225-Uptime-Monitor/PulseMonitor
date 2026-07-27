@@ -5,19 +5,19 @@
 # following the dependency order: network -> compute / storage -> monitoring -> dns.
 # See ./modules/* for the per-layer scaffolds and README.md for the roadmap.
 
-# module "network" {
-#   source             = "./modules/network"
-#   vpc_cidr           = var.vpc_cidr
-#   availability_zones = var.availability_zones
-#   project_name       = var.project_name
-#   environment        = var.environment
-# }
+module "network" {
+  source             = "./modules/network"
+  vpc_cidr           = var.vpc_cidr
+  availability_zones = var.availability_zones
+  project_name       = var.project_name
+  environment        = var.environment
+}
 
-# module "storage" {
-#   source       = "./modules/storage"
-#   project_name = var.project_name
-#   environment  = var.environment
-# }
+module "storage" {
+  source       = "./modules/storage"
+  project_name = var.project_name
+  environment  = var.environment
+}
 
 # module "compute" {
 #   source             = "./modules/compute"
