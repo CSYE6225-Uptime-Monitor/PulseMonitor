@@ -1,5 +1,6 @@
 export interface User {
   email: string;
+  user_id: string;
   first_name: string;
   last_name: string;
   created_at: string;
@@ -51,6 +52,11 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
+  // DELETE endpoints return 204 with no body - parsing it as JSON would throw.
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
   const envelope = (await res.json()) as ApiEnvelope<T>;
 
   if (!envelope.success) {
@@ -65,4 +71,5 @@ export const api = {
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
   put: <T>(path: string, body?: unknown) => request<T>("PUT", path, body),
+  del: <T>(path: string) => request<T>("DELETE", path),
 };

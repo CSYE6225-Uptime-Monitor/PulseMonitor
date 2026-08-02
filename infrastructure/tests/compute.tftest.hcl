@@ -62,6 +62,24 @@ variables {
   monitoring_history_bucket_arn  = "arn:aws:s3:::pulsemonitor-dev-monitoring-history-123456789012"
 }
 
+run "user_data_wires_the_history_bucket" {
+  command = plan
+
+  module {
+    source = "./modules/compute"
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "HISTORY_BUCKET=pulsemonitor-dev-monitoring-history-123456789012")
+    error_message = "user_data must write HISTORY_BUCKET so the backend can read history from S3."
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "HISTORY_PREFIX=sites")
+    error_message = "user_data must write HISTORY_PREFIX so the backend's S3 key prefix matches the pinger's."
+  }
+}
+
 run "compute_outputs_are_exposed" {
   command = apply
 

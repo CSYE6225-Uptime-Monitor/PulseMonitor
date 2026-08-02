@@ -48,7 +48,13 @@ describe('auth flow', () => {
   it('logs the user out and clears the session', async () => {
     const passwordHash = await bcrypt.hash('supersecret', 4);
     ddbMock.on(GetCommand).resolves({
-      Item: { email: 'jane@example.com', password_hash: passwordHash, first_name: 'Jane', last_name: 'Doe' },
+      Item: {
+        email: 'jane@example.com',
+        user_id: '11111111-1111-4111-8111-111111111111',
+        password_hash: passwordHash,
+        first_name: 'Jane',
+        last_name: 'Doe',
+      },
     });
 
     const agent = request.agent(app);
@@ -64,5 +70,35 @@ describe('auth flow', () => {
 
     const selfRes = await agent.get('/v1/user/self');
     expect(selfRes.status).toBe(401);
+  });
+
+  it('includes user_id in the login response and stores it in the session', async () => {
+    const passwordHash = await bcrypt.hash('supersecret', 4);
+    ddbMock.on(GetCommand).resolves({
+      Item: {
+        email: 'jane@example.com',
+        user_id: '22222222-2222-4222-8222-222222222222',
+        password_hash: passwordHash,
+        first_name: 'Jane',
+        last_name: 'Doe',
+      },
+    });
+
+    const agent = request.agent(app);
+    const csrfToken = await getCsrfToken(agent);
+
+    const loginRes = await agent
+      .post('/v1/login')
+      .set('x-csrf-token', csrfToken)
+      .send({ email: 'jane@example.com', password: 'supersecret' });
+
+    expect(loginRes.status).toBe(200);
+    expect(loginRes.body.data.user_id).toBe('22222222-2222-4222-8222-222222222222');
+
+    // requireAuth now demands both email and user_id on the session, so a 200
+    // here (not 401) proves user_id actually made it into the session cookie.
+    const selfRes = await agent.get('/v1/user/self');
+    expect(selfRes.status).toBe(200);
+    expect(selfRes.body.data.user_id).toBe('22222222-2222-4222-8222-222222222222');
   });
 });

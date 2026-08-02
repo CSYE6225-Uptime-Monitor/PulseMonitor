@@ -1,4 +1,5 @@
 const bcrypt = require('bcryptjs');
+const { randomUUID } = require('node:crypto');
 const userRepository = require('../repositories/userRepository');
 const AppError = require('../errors/AppError');
 
@@ -7,6 +8,7 @@ const SALT_ROUNDS = 10;
 function toSafeUser(user) {
   return {
     email: user.email,
+    user_id: user.user_id,
     first_name: user.first_name,
     last_name: user.last_name,
     created_at: user.created_at,
@@ -20,6 +22,7 @@ async function createUser({ email, password, first_name, last_name }) {
 
   const user = await userRepository.create({
     email,
+    user_id: randomUUID(),
     password_hash,
     first_name,
     last_name,
@@ -37,7 +40,20 @@ async function verifyCredentials(email, password) {
   }
 
   const isValid = await bcrypt.compare(password, user.password_hash);
-  return isValid ? toSafeUser(user) : null;
+  if (!isValid) {
+    return null;
+  }
+
+  // Accounts created before user_id existed have no attribute for it. Rather
+  // than a one-off migration script, assign it the first time such an
+  // account logs in and persist it - the sites table (and its S3 history
+  // keys) are keyed on this id, so it must exist before any site can be created.
+  if (!user.user_id) {
+    const updated = await userRepository.update(email, { user_id: randomUUID() });
+    return toSafeUser(updated);
+  }
+
+  return toSafeUser(user);
 }
 
 async function getSelf(email) {

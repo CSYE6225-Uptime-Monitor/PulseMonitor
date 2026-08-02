@@ -3,7 +3,7 @@ const { DynamoDBDocumentClient } = require('@aws-sdk/lib-dynamodb');
 const { S3Client } = require('@aws-sdk/client-s3');
 
 const { pingUrl } = require('./lib/ping');
-const { scanEnabledSites, writeSiteStatus } = require('./lib/sites');
+const { scanDueSites, writeSiteStatus } = require('./lib/sites');
 const { writeHistoryRecord } = require('./lib/history');
 const { emitSiteDownMetric } = require('./lib/metrics');
 
@@ -107,7 +107,7 @@ async function handler(event, context) {
   const config = readEnv();
   const { docClient, s3Client } = makeClients(config);
 
-  const sites = await scanEnabledSites(docClient, config.sitesTable);
+  const sites = await scanDueSites(docClient, config.sitesTable);
 
   const shouldStop = () =>
     typeof context?.getRemainingTimeInMillis === 'function' && context.getRemainingTimeInMillis() < 15000;

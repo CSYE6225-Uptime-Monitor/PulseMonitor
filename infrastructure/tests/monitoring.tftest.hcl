@@ -234,6 +234,32 @@ run "pinger_role_is_least_privilege" {
   }
 }
 
+run "ping_schedule_default_matches_the_api_minimum_check_frequency" {
+  # Tripwire, not a proof: the backend's check_frequency_minutes schema has a
+  # floor of 5 because the pinger only ticks every 5 minutes. If this default
+  # ever changes, that floor silently becomes a lie - this test forces the
+  # conversation instead of letting it happen quietly.
+  command = plan
+
+  module {
+    source = "./modules/monitoring"
+  }
+
+  variables {
+    project_name                  = "pulsemonitor"
+    environment                   = "dev"
+    sites_table_name              = "pulsemonitor-dev-sites"
+    sites_table_arn               = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-sites"
+    monitoring_history_bucket     = "pulsemonitor-dev-monitoring-history-123456789012"
+    monitoring_history_bucket_arn = "arn:aws:s3:::pulsemonitor-dev-monitoring-history-123456789012"
+  }
+
+  assert {
+    condition     = var.ping_schedule == "rate(5 minutes)"
+    error_message = "ping_schedule default changed - update the backend's check_frequency_minutes floor (currently 5) to match, or revert this default."
+  }
+}
+
 run "rejects_ping_timeout_longer_than_lambda_timeout" {
   command = plan
 

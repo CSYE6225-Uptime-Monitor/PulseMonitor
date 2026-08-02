@@ -76,6 +76,12 @@ variable "ping_schedule" {
   default     = "rate(5 minutes)"
 }
 
+variable "history_prefix" {
+  description = "S3 key prefix for history records. Fed to both module.monitoring (writer) and module.compute (reader) from this single source, so they can never drift apart."
+  type        = string
+  default     = "sites"
+}
+
 variable "enable_alerts" {
   description = "Whether to provision the SNS alerts topic and CloudWatch alarms (Sprint 4)."
   type        = bool

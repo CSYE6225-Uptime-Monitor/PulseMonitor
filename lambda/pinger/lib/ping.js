@@ -1,5 +1,8 @@
 const dns = require('node:dns');
 
+// backend/src/utils/urlGuard.js keeps a synchronous-only copy of these ranges
+// (write-time SSRF check, no DNS) - kept in sync by convention rather than a
+// shared module, since packer/backend-ami.pkr.hcl only ever copies backend/.
 const PRIVATE_V4_RANGES = [
   /^10\./,
   /^127\./,

@@ -1,4 +1,4 @@
-const REQUIRED = ['SESSION_SECRET', 'USERS_TABLE', 'AWS_REGION'];
+const REQUIRED = ['SESSION_SECRET', 'USERS_TABLE', 'AWS_REGION', 'SITES_TABLE', 'HISTORY_BUCKET'];
 
 function readEnv() {
   const missing = REQUIRED.filter((key) => !process.env[key]);
@@ -18,8 +18,12 @@ function readEnv() {
     cookieSecure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : nodeEnv === 'production',
     sessionSecret: process.env.SESSION_SECRET,
     usersTable: process.env.USERS_TABLE,
+    sitesTable: process.env.SITES_TABLE,
     awsRegion: process.env.AWS_REGION,
     dynamoEndpoint: process.env.DYNAMODB_ENDPOINT,
+    historyBucket: process.env.HISTORY_BUCKET,
+    historyPrefix: process.env.HISTORY_PREFIX || 'sites',
+    s3Endpoint: process.env.S3_ENDPOINT,
   };
 }
 

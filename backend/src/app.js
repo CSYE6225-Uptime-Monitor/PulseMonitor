@@ -6,6 +6,7 @@ const errorHandler = require('./middleware/errorHandler');
 const healthRoutes = require('./routes/health');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
+const siteRoutes = require('./routes/sites');
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use('/', routes);
 app.use(healthRoutes);
 app.use(authRoutes);
 app.use(userRoutes);
+app.use(siteRoutes);
 
 app.use(errorHandler);
 

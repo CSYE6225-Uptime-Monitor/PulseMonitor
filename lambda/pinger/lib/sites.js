@@ -1,11 +1,36 @@
 const { ScanCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
 
 // Reserved words in DynamoDB - url, status, and name all require
-// ExpressionAttributeNames whenever they're referenced.
-const PROJECTION = '#url, #name, user_id, site_id, enabled, check_frequency_minutes, consecutive_failures';
+// ExpressionAttributeNames whenever they're referenced. checked_at is not
+// reserved and needs no alias.
+const PROJECTION =
+  '#url, #name, user_id, site_id, enabled, check_frequency_minutes, consecutive_failures, checked_at';
 const SCAN_EXPRESSION_NAMES = { '#url': 'url', '#name': 'name' };
 
-async function scanEnabledSites(docClient, tableName) {
+const DEFAULT_FREQUENCY_MINUTES = 5;
+// Compensates for EventBridge rate() jitter and runPool spreading checked_at
+// across an invocation - both scheduler properties, not site properties, so
+// this is a flat offset rather than a percentage of the frequency. Without
+// it, a site checked just under one tick ago gets skipped and waits a full
+// extra tick, silently halving its effective check rate.
+// INVARIANT: must stay well below the EventBridge tick interval (5 minutes),
+// or every site becomes due every tick and this predicate is a no-op.
+const DUE_TOLERANCE_MS = 30_000;
+
+// Pure and injectable-`now` so every case is a plain equality assertion -
+// jest.useFakeTimers() would leak across tests and fight the AbortSignal
+// timers pingUrl uses.
+function isSiteDue(site, nowMs) {
+  if (!site.checked_at) return true;
+
+  const checkedAtMs = Date.parse(site.checked_at);
+  if (Number.isNaN(checkedAtMs)) return true;
+
+  const freqMinutes = Number(site.check_frequency_minutes) || DEFAULT_FREQUENCY_MINUTES;
+  return nowMs - checkedAtMs >= freqMinutes * 60_000 - DUE_TOLERANCE_MS;
+}
+
+async function scanDueSites(docClient, tableName, { now = Date.now() } = {}) {
   const sites = [];
   let lastEvaluatedKey;
 
@@ -22,7 +47,7 @@ async function scanEnabledSites(docClient, tableName) {
     lastEvaluatedKey = page.LastEvaluatedKey;
   } while (lastEvaluatedKey);
 
-  return sites.filter((site) => site.enabled !== false);
+  return sites.filter((site) => site.enabled !== false && isSiteDue(site, now));
 }
 
 // Writes the ping result back onto the site item. ConditionExpression means a
@@ -67,4 +92,4 @@ async function writeSiteStatus(docClient, tableName, { userId, siteId, previousS
   );
 }
 
-module.exports = { scanEnabledSites, writeSiteStatus };
+module.exports = { scanDueSites, writeSiteStatus, isSiteDue };

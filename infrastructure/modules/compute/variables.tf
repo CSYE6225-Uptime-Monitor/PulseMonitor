@@ -156,6 +156,12 @@ variable "monitoring_history_bucket_arn" {
   type        = string
 }
 
+variable "history_prefix" {
+  description = "S3 key prefix history records are read from. Must match module.monitoring's history_prefix (the pinger's write prefix) - fed from the same root variable so the two can't drift."
+  type        = string
+  default     = "sites"
+}
+
 variable "log_retention_days" {
   description = "CloudWatch log group retention for the app, in days."
   type        = number

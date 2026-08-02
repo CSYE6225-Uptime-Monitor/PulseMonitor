@@ -337,6 +337,8 @@ resource "aws_launch_template" "app" {
     region               = var.aws_region
     users_table          = var.users_table_name
     sites_table          = var.sites_table_name
+    history_bucket       = var.monitoring_history_bucket_name
+    history_prefix       = var.history_prefix
     app_port             = var.app_port
     node_env             = var.node_env
     cookie_secure        = var.cookie_secure

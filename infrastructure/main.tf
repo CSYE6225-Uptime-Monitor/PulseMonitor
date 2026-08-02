@@ -29,6 +29,7 @@ module "monitoring" {
   sites_table_arn               = module.storage.sites_table_arn
   monitoring_history_bucket     = module.storage.monitoring_history_bucket_name
   monitoring_history_bucket_arn = module.storage.monitoring_history_bucket_arn
+  history_prefix                = var.history_prefix
   ping_schedule                 = var.ping_schedule
   enable_alerts                 = var.enable_alerts
   alert_email                   = var.alert_email
@@ -60,6 +61,7 @@ module "compute" {
   audit_logs_bucket_arn          = module.storage.audit_logs_bucket_arn
   monitoring_history_bucket_name = module.storage.monitoring_history_bucket_name
   monitoring_history_bucket_arn  = module.storage.monitoring_history_bucket_arn
+  history_prefix                 = var.history_prefix
 }
 
 # module "dns" {
