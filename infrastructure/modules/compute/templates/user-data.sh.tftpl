@@ -36,6 +36,11 @@ cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
             "file_path": "/var/log/pulsemonitor/app.log",
             "log_group_name": "${log_group_name}",
             "log_stream_name": "{instance_id}"
+          },
+          {
+            "file_path": "/var/log/pulsemonitor/frontend.log",
+            "log_group_name": "${log_group_name}",
+            "log_stream_name": "{instance_id}-frontend"
           }
         ]
       }
@@ -44,7 +49,7 @@ cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
 }
 EOF
 
-systemctl start nginx pulsemonitor
+systemctl start nginx pulsemonitor pulsemonitor-frontend
 
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
   -a fetch-config -m ec2 -s \

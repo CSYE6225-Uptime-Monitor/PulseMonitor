@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { api, type User } from "./api";
+import { api, clearCsrfToken, type User } from "./api";
 
 interface SignupInput {
   email: string;
@@ -71,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await api.post("/v1/logout");
+    clearCsrfToken();
     setUser(null);
   }, []);
 

@@ -48,9 +48,12 @@ build {
 
   provisioner "shell" {
     inline = [
-      "sudo dnf install -y nginx nodejs20 amazon-cloudwatch-agent",
+      # nodejs22 matches the pinger Lambda's nodejs22.x runtime and satisfies
+      # the frontend's Next 16 minimum (Node >=20.9).
+      "sudo dnf install -y nginx nodejs22 amazon-cloudwatch-agent",
       "sudo useradd -r -s /sbin/nologin pulsemonitor || true",
       "sudo install -d -o pulsemonitor -g pulsemonitor /opt/pulsemonitor",
+      "sudo install -d -o pulsemonitor -g pulsemonitor /opt/pulsemonitor-frontend",
       "sudo install -d -m 0750 -o root -g pulsemonitor /etc/pulsemonitor",
       # pulsemonitor.service writes here instead of the journal so the
       # CloudWatch agent (configured by user-data, which knows the
@@ -75,6 +78,40 @@ build {
     ]
   }
 
+  # Built with `npm ci && npm run build` in frontend/ before running `packer
+  # build` (produces .next/standalone/, which bundles only the frontend's
+  # production deps - see frontend/next.config.ts's `output: "standalone"`).
+  # standalone output doesn't copy static assets itself, so those are staged
+  # into it here rather than shipped as separate top-level directories.
+  provisioner "shell" {
+    inline = [
+      "mkdir -p /tmp/pulsemonitor-frontend/.next/static /tmp/pulsemonitor-frontend/public",
+    ]
+  }
+
+  provisioner "file" {
+    source      = "../frontend/.next/standalone/"
+    destination = "/tmp/pulsemonitor-frontend"
+  }
+
+  provisioner "file" {
+    source      = "../frontend/.next/static/"
+    destination = "/tmp/pulsemonitor-frontend/.next/static"
+  }
+
+  provisioner "file" {
+    source      = "../frontend/public/"
+    destination = "/tmp/pulsemonitor-frontend/public"
+  }
+
+  provisioner "shell" {
+    inline = [
+      "sudo rm -rf /opt/pulsemonitor-frontend/*",
+      "sudo cp -r /tmp/pulsemonitor-frontend/. /opt/pulsemonitor-frontend/",
+      "sudo chown -R pulsemonitor:pulsemonitor /opt/pulsemonitor-frontend",
+    ]
+  }
+
   provisioner "file" {
     source      = "files/nginx.conf"
     destination = "/tmp/nginx.conf"
@@ -85,14 +122,22 @@ build {
     destination = "/tmp/pulsemonitor.service"
   }
 
+  provisioner "file" {
+    source      = "files/pulsemonitor-frontend.service"
+    destination = "/tmp/pulsemonitor-frontend.service"
+  }
+
   provisioner "shell" {
     inline = [
       "sudo mv /tmp/nginx.conf /etc/nginx/nginx.conf",
       "sudo mv /tmp/pulsemonitor.service /etc/systemd/system/pulsemonitor.service",
+      "sudo mv /tmp/pulsemonitor-frontend.service /etc/systemd/system/pulsemonitor-frontend.service",
       "sudo systemctl daemon-reload",
-      # enable, not start: both units need the /etc/pulsemonitor/app.env file
-      # that user-data writes at boot (SESSION_SECRET, table names, etc).
-      "sudo systemctl enable nginx pulsemonitor",
+      # enable, not start: pulsemonitor.service needs the /etc/pulsemonitor/app.env
+      # file that user-data writes at boot (SESSION_SECRET, table names, etc).
+      # pulsemonitor-frontend.service needs no secrets, but user-data starts
+      # all three units together for a single, predictable boot sequence.
+      "sudo systemctl enable nginx pulsemonitor pulsemonitor-frontend",
     ]
   }
 }

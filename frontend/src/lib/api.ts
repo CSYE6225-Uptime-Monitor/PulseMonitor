@@ -22,7 +22,35 @@ export class ApiError extends Error {
   }
 }
 
+export type QueryParams = Record<string, string | number | boolean | undefined>;
+
+function withQuery(path: string, params?: QueryParams): string {
+  if (!params) {
+    return path;
+  }
+
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) {
+      query.set(key, String(value));
+    }
+  }
+
+  const serialized = query.toString();
+  return serialized ? `${path}?${serialized}` : path;
+}
+
 let csrfToken: string | null = null;
+
+/**
+ * Drops the cached CSRF token. Logout destroys the session's csrfId server-side
+ * (see backend/src/routes/auth.js `req.session = null`), which invalidates any
+ * token minted against it - without this, the next mutating request after a
+ * logout/login cycle would send a stale token and get a spurious 403.
+ */
+export function clearCsrfToken(): void {
+  csrfToken = null;
+}
 
 async function fetchCsrfToken(): Promise<string> {
   const res = await fetch("/api/v1/csrf-token", { credentials: "include" });
@@ -36,12 +64,7 @@ async function fetchCsrfToken(): Promise<string> {
   return csrfToken;
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const isMutating = method !== "GET";
-  if (isMutating && !csrfToken) {
-    await fetchCsrfToken();
-  }
-
+async function performRequest<T>(method: string, path: string, isMutating: boolean, body?: unknown) {
   const res = await fetch(`/api${path}`, {
     method,
     credentials: "include",
@@ -54,13 +77,37 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
   // DELETE endpoints return 204 with no body - parsing it as JSON would throw.
   if (res.status === 204) {
-    return undefined as T;
+    return { res, data: undefined as T };
   }
 
   const envelope = (await res.json()) as ApiEnvelope<T>;
+  return { res, envelope };
+}
 
-  if (!envelope.success) {
-    throw new ApiError(res.status, envelope.error ?? "Request failed.");
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const isMutating = method !== "GET";
+  if (isMutating && !csrfToken) {
+    await fetchCsrfToken();
+  }
+
+  let { res, envelope, data } = await performRequest<T>(method, path, isMutating, body);
+
+  // A 403 on a mutating request means the cached token is bound to a csrfId the
+  // server no longer recognizes (e.g. a logout happened since it was minted).
+  // Refresh the token and retry exactly once - retrying more than that would
+  // mask a genuine, persistent auth failure as an infinite loop.
+  if (isMutating && res.status === 403) {
+    clearCsrfToken();
+    await fetchCsrfToken();
+    ({ res, envelope, data } = await performRequest<T>(method, path, isMutating, body));
+  }
+
+  if (res.status === 204) {
+    return data as T;
+  }
+
+  if (!envelope || !envelope.success) {
+    throw new ApiError(res.status, envelope?.error ?? "Request failed.");
   }
 
   return envelope.data as T;
@@ -68,7 +115,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 export const api = {
   getCsrfToken: fetchCsrfToken,
-  get: <T>(path: string) => request<T>("GET", path),
+  get: <T>(path: string, params?: QueryParams) => request<T>("GET", withQuery(path, params)),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
   put: <T>(path: string, body?: unknown) => request<T>("PUT", path, body),
   del: <T>(path: string) => request<T>("DELETE", path),
