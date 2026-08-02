@@ -49,3 +49,8 @@ output "monitoring_history_bucket_arn" {
   description = "ARN of the monitoring-history S3 bucket."
   value       = aws_s3_bucket.monitoring_history.arn
 }
+
+output "monitoring_history_lifecycle_prefix" {
+  description = "S3 key prefix used by the lifecycle expiry rule. Exposed so root-module tests can assert that history_prefix is wired correctly."
+  value       = var.raw_ping_prefix
+}

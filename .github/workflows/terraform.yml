@@ -27,6 +27,17 @@ jobs:
         with:
           terraform_version: "1.15.8"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # archive_file zips lambda/pinger/ during `terraform test`/`plan`, so
+      # node_modules must hold production deps only - mirrors the AMI's
+      # "npm ci --omit=dev" convention for the backend.
+      - name: Install pinger production dependencies
+        working-directory: lambda/pinger
+        run: npm ci --omit=dev
+
       - name: Format check
         run: terraform fmt -recursive -check
 
@@ -56,7 +67,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - run: npm ci
       - run: npm test

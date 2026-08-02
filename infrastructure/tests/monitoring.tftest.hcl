@@ -93,8 +93,8 @@ run "pinger_lambda_is_configured" {
   }
 
   assert {
-    condition     = aws_lambda_function.pinger.runtime == "nodejs20.x"
-    error_message = "Pinger Lambda must run on nodejs20.x."
+    condition     = aws_lambda_function.pinger.runtime == "nodejs22.x"
+    error_message = "Pinger Lambda must run on nodejs22.x."
   }
 
   assert {

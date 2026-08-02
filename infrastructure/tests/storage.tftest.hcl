@@ -100,6 +100,11 @@ run "storage_outputs_are_exposed" {
     condition     = module.storage.monitoring_history_bucket_name != null && module.storage.monitoring_history_bucket_arn != null
     error_message = "Storage module should output the monitoring-history bucket name and ARN."
   }
+
+  assert {
+    condition     = module.storage.monitoring_history_lifecycle_prefix == "sites/"
+    error_message = "Root module must wire history_prefix into storage's raw_ping_prefix so they cannot drift: expected lifecycle prefix 'sites/'."
+  }
 }
 
 # Unit-tests the storage module directly (not via the root wiring) so we can

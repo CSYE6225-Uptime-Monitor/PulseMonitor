@@ -12,6 +12,10 @@ locals {
   name_prefix = "${var.project_name}-${var.environment}"
 }
 
+data "aws_region" "current" {}
+
+data "aws_caller_identity" "current" {}
+
 data "aws_ami" "app" {
   count       = var.ami_id == null ? 1 : 0
   most_recent = true
@@ -188,6 +192,14 @@ resource "aws_iam_role_policy" "ssm_params" {
         Action   = ["ssm:GetParameter", "ssm:GetParameters"]
         Resource = [aws_ssm_parameter.session_secret.arn]
       },
+      {
+        # SecureString above uses the default aws/ssm key, whose key policy
+        # can't be edited - so decrypt access is granted here via IAM instead.
+        Sid      = "DecryptSessionSecret"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = ["arn:aws:kms:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:alias/aws/ssm"]
+      },
     ]
   })
 }
@@ -343,6 +355,7 @@ resource "aws_launch_template" "app" {
     node_env             = var.node_env
     cookie_secure        = var.cookie_secure
     session_secret_param = aws_ssm_parameter.session_secret.name
+    log_group_name       = aws_cloudwatch_log_group.app.name
   }))
 
   lifecycle {

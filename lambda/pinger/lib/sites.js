@@ -4,8 +4,8 @@ const { ScanCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
 // ExpressionAttributeNames whenever they're referenced. checked_at is not
 // reserved and needs no alias.
 const PROJECTION =
-  '#url, #name, user_id, site_id, enabled, check_frequency_minutes, consecutive_failures, checked_at';
-const SCAN_EXPRESSION_NAMES = { '#url': 'url', '#name': 'name' };
+  '#url, #name, #status, user_id, site_id, enabled, check_frequency_minutes, consecutive_failures, checked_at';
+const SCAN_EXPRESSION_NAMES = { '#url': 'url', '#name': 'name', '#status': 'status' };
 
 const DEFAULT_FREQUENCY_MINUTES = 5;
 // Compensates for EventBridge rate() jitter and runPool spreading checked_at
@@ -55,7 +55,6 @@ async function scanDueSites(docClient, tableName, { now = Date.now() } = {}) {
 // instead of resurrecting a deleted row - callers should swallow that error.
 async function writeSiteStatus(docClient, tableName, { userId, siteId, previousStatus, result, checkedAt }) {
   const statusChanged = previousStatus === undefined || previousStatus !== result.status;
-  const consecutiveFailures = result.status === 'up' ? 0 : 1;
 
   const updateExpression = [
     'SET #status = :status',
@@ -64,7 +63,6 @@ async function writeSiteStatus(docClient, tableName, { userId, siteId, previousS
     'checked_at = :checked_at',
     'error_type = :error_type',
     'error_message = :error_message',
-    'consecutive_failures = :consecutive_failures',
   ];
   const values = {
     ':status': result.status,
@@ -73,8 +71,22 @@ async function writeSiteStatus(docClient, tableName, { userId, siteId, previousS
     ':checked_at': checkedAt,
     ':error_type': result.error_type,
     ':error_message': result.error_message,
-    ':consecutive_failures': consecutiveFailures,
   };
+
+  if (result.status === 'up') {
+    updateExpression.push('consecutive_failures = :consecutive_failures');
+    values[':consecutive_failures'] = 0;
+  } else if (statusChanged) {
+    // First failure after being up (or never checked) - start the streak at 1.
+    updateExpression.push('consecutive_failures = :consecutive_failures');
+    values[':consecutive_failures'] = 1;
+  } else {
+    // Still down - increment atomically rather than trusting the scanned
+    // count, which may be stale by the time this UpdateItem runs.
+    updateExpression.push('consecutive_failures = if_not_exists(consecutive_failures, :zero) + :one');
+    values[':zero'] = 0;
+    values[':one'] = 1;
+  }
 
   if (statusChanged) {
     updateExpression.push('last_status_change_at = :checked_at');

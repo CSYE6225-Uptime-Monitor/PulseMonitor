@@ -48,10 +48,14 @@ build {
 
   provisioner "shell" {
     inline = [
-      "sudo dnf install -y nginx nodejs20",
+      "sudo dnf install -y nginx nodejs20 amazon-cloudwatch-agent",
       "sudo useradd -r -s /sbin/nologin pulsemonitor || true",
       "sudo install -d -o pulsemonitor -g pulsemonitor /opt/pulsemonitor",
       "sudo install -d -m 0750 -o root -g pulsemonitor /etc/pulsemonitor",
+      # pulsemonitor.service writes here instead of the journal so the
+      # CloudWatch agent (configured by user-data, which knows the
+      # environment-specific log group name) has a file to tail.
+      "sudo install -d -o pulsemonitor -g pulsemonitor /var/log/pulsemonitor",
     ]
   }
 

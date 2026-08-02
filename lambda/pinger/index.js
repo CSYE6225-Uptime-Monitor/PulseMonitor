@@ -64,7 +64,7 @@ async function checkSite(site, { docClient, s3Client, config }) {
     await writeSiteStatus(docClient, config.sitesTable, {
       userId: site.user_id,
       siteId: site.site_id,
-      previousStatus: undefined,
+      previousStatus: site.status,
       result,
       checkedAt,
     });

@@ -19,6 +19,7 @@ module "storage" {
   environment                       = var.environment
   monitoring_history_retention_days = var.monitoring_history_retention_days
   bucket_force_destroy              = var.bucket_force_destroy
+  raw_ping_prefix                   = "${var.history_prefix}/"
 }
 
 module "monitoring" {

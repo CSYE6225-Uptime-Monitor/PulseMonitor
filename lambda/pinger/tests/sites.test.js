@@ -59,7 +59,7 @@ describe('isSiteDue', () => {
 });
 
 describe('scanDueSites', () => {
-  it('requests checked_at in the Scan projection', async () => {
+  it('requests checked_at and status in the Scan projection', async () => {
     const ddb = docClientMock();
     ddb.on(ScanCommand).resolves({ Items: [] });
 
@@ -67,9 +67,14 @@ describe('scanDueSites', () => {
 
     const call = ddb.commandCalls(ScanCommand)[0].args[0].input;
     expect(call.ProjectionExpression).toContain('checked_at');
+    expect(call.ProjectionExpression).toContain('#status');
     // checked_at is not a DynamoDB reserved word, unlike url/name/status -
     // it needs no ExpressionAttributeNames entry.
     expect(Object.values(call.ExpressionAttributeNames)).not.toContain('checked_at');
+    // status is scanned so the caller can pass the prior value into
+    // writeSiteStatus - without it, previousStatus is always undefined and
+    // statusChanged is always true.
+    expect(call.ExpressionAttributeNames['#status']).toBe('status');
   });
 
   it('paginates and filters out disabled sites', async () => {
@@ -154,6 +159,64 @@ describe('writeSiteStatus', () => {
     });
 
     const call = ddb.commandCalls(UpdateCommand)[0].args[0].input;
+    expect(call.UpdateExpression).not.toContain('last_status_change_at');
+  });
+
+  it('resets consecutive_failures to 0 and bumps last_status_change_at on recovery', async () => {
+    const ddb = docClientMock();
+    ddb.on(UpdateCommand).resolves({});
+
+    await writeSiteStatus(ddb, 'pulsemonitor-dev-sites', {
+      userId: 'u1',
+      siteId: 's1',
+      previousStatus: 'down',
+      result: { status: 'up', status_code: 200, latency_ms: 100, error_type: null, error_message: null },
+      checkedAt: '2026-08-02T14:05:03.123Z',
+    });
+
+    const call = ddb.commandCalls(UpdateCommand)[0].args[0].input;
+    expect(call.UpdateExpression).toContain('consecutive_failures = :consecutive_failures');
+    expect(call.ExpressionAttributeValues[':consecutive_failures']).toBe(0);
+    expect(call.UpdateExpression).toContain('last_status_change_at = :checked_at');
+  });
+
+  it('sets consecutive_failures to 1 on the first failure after being up', async () => {
+    const ddb = docClientMock();
+    ddb.on(UpdateCommand).resolves({});
+
+    await writeSiteStatus(ddb, 'pulsemonitor-dev-sites', {
+      userId: 'u1',
+      siteId: 's1',
+      previousStatus: 'up',
+      result: { status: 'down', status_code: null, latency_ms: null, error_type: 'timeout', error_message: 'timed out' },
+      checkedAt: '2026-08-02T14:05:03.123Z',
+    });
+
+    const call = ddb.commandCalls(UpdateCommand)[0].args[0].input;
+    expect(call.UpdateExpression).toContain('consecutive_failures = :consecutive_failures');
+    expect(call.ExpressionAttributeValues[':consecutive_failures']).toBe(1);
+    expect(call.UpdateExpression).toContain('last_status_change_at = :checked_at');
+  });
+
+  it('increments consecutive_failures atomically when the site is still down', async () => {
+    const ddb = docClientMock();
+    ddb.on(UpdateCommand).resolves({});
+
+    await writeSiteStatus(ddb, 'pulsemonitor-dev-sites', {
+      userId: 'u1',
+      siteId: 's1',
+      previousStatus: 'down',
+      result: { status: 'down', status_code: null, latency_ms: null, error_type: 'timeout', error_message: 'timed out' },
+      checkedAt: '2026-08-02T14:05:03.123Z',
+    });
+
+    const call = ddb.commandCalls(UpdateCommand)[0].args[0].input;
+    expect(call.UpdateExpression).toContain(
+      'consecutive_failures = if_not_exists(consecutive_failures, :zero) + :one',
+    );
+    expect(call.ExpressionAttributeValues[':zero']).toBe(0);
+    expect(call.ExpressionAttributeValues[':one']).toBe(1);
+    // Still down - status did not flip, so last_status_change_at is untouched.
     expect(call.UpdateExpression).not.toContain('last_status_change_at');
   });
 

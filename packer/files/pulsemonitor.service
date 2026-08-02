@@ -2,6 +2,7 @@
 Description=PulseMonitor API
 After=network-online.target
 Wants=network-online.target
+ConditionPathExists=/etc/pulsemonitor/app.env
 
 [Service]
 User=pulsemonitor
@@ -10,8 +11,8 @@ EnvironmentFile=/etc/pulsemonitor/app.env
 ExecStart=/usr/bin/node server.js
 Restart=always
 RestartSec=5
-StandardOutput=journal
-StandardError=journal
+StandardOutput=append:/var/log/pulsemonitor/app.log
+StandardError=append:/var/log/pulsemonitor/app.log
 
 [Install]
 WantedBy=multi-user.target

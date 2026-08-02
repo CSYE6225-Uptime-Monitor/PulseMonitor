@@ -25,11 +25,16 @@ locals {
   log_group_name = "/aws/lambda/${local.function_name}"
 }
 
+# node_modules is bundled (not excluded): the pinger's AWS SDK v3 packages
+# are regular "dependencies" and must ship in the zip rather than resolve
+# from the Lambda runtime's provided SDK, per AWS's own recommendation. Run
+# `npm ci --omit=dev` in lambda/pinger/ before `terraform apply` so only
+# production deps land in node_modules and thus in this zip.
 data "archive_file" "pinger" {
   type        = "zip"
   source_dir  = "${path.module}/../../../lambda/pinger"
   output_path = "${path.module}/build/pinger.zip"
-  excludes    = ["node_modules", "coverage", "tests", "package-lock.json", "*.test.js", "README.md"]
+  excludes    = ["coverage", "tests", "package-lock.json", "*.test.js", "README.md"]
 }
 
 resource "aws_cloudwatch_log_group" "pinger" {
@@ -98,7 +103,7 @@ resource "aws_lambda_function" "pinger" {
   function_name = local.function_name
   role          = aws_iam_role.pinger.arn
   handler       = "index.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   architectures = ["arm64"]
 
   filename         = data.archive_file.pinger.output_path

@@ -80,6 +80,29 @@ run "user_data_wires_the_history_bucket" {
   }
 }
 
+run "user_data_configures_the_cloudwatch_agent" {
+  command = plan
+
+  module {
+    source = "./modules/compute"
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "\"log_group_name\": \"/pulsemonitor/dev/app\"")
+    error_message = "user_data must configure the CloudWatch agent with the app log group name, or the log group stays permanently empty."
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "/var/log/pulsemonitor/app.log")
+    error_message = "user_data's CloudWatch agent config must tail the file pulsemonitor.service writes to."
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "amazon-cloudwatch-agent-ctl")
+    error_message = "user_data must start the CloudWatch agent so logs actually ship."
+  }
+}
+
 run "compute_outputs_are_exposed" {
   command = apply
 

@@ -2,10 +2,11 @@
 set -euxo pipefail
 exec > >(tee /var/log/user-data.log) 2>&1
 
-# The app, nginx, and systemd units are already installed on the AMI (see
-# packer/backend-ami.pkr.hcl). This script only writes the runtime
-# environment file - including the session secret pulled from SSM - and
-# starts the services.
+# The app, nginx, systemd units, and the CloudWatch agent binary are already
+# installed on the AMI (see packer/backend-ami.pkr.hcl). This script only
+# writes the runtime environment file - including the session secret pulled
+# from SSM - the CloudWatch agent config (which needs the environment-
+# specific log group name), and starts everything.
 
 SECRET=$(aws ssm get-parameter --name "${session_secret_param}" --with-decryption \
   --query Parameter.Value --output text --region ${region})
@@ -24,4 +25,27 @@ EOF
 chmod 0640 /etc/pulsemonitor/app.env
 chown root:pulsemonitor /etc/pulsemonitor/app.env
 
+mkdir -p /opt/aws/amazon-cloudwatch-agent/etc
+cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/pulsemonitor/app.log",
+            "log_group_name": "${log_group_name}",
+            "log_stream_name": "{instance_id}"
+          }
+        ]
+      }
+    }
+  }
+}
+EOF
+
 systemctl start nginx pulsemonitor
+
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 -s \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
