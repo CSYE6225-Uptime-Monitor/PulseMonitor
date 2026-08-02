@@ -1,0 +1,18 @@
+[Unit]
+Description=PulseMonitor Frontend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pulsemonitor
+WorkingDirectory=/opt/pulsemonitor-frontend
+Environment=PORT=3000
+Environment=HOSTNAME=127.0.0.1
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/pulsemonitor/frontend.log
+StandardError=append:/var/log/pulsemonitor/frontend.log
+
+[Install]
+WantedBy=multi-user.target
