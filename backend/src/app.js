@@ -9,6 +9,10 @@ const userRoutes = require('./routes/users');
 
 const app = express();
 
+// Required behind nginx + the ALB: without it, req.secure and req.ip are
+// derived from the direct (loopback) connection instead of X-Forwarded-*.
+app.set('trust proxy', 1);
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(sessionMiddleware());

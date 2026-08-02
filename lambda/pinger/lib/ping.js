@@ -51,10 +51,18 @@ async function assertUrlIsPingable(rawUrl) {
 }
 
 function classifyError(err) {
-  if (err.name === 'AbortError' || err.name === 'TimeoutError') return 'timeout';
-  if (err.code === 'ENOTFOUND' || err.code === 'EAI_AGAIN') return 'dns_error';
-  if (err.code === 'ECONNREFUSED') return 'connection_refused';
-  if (err.message && /certificate|SSL|TLS/i.test(err.message)) return 'tls_error';
+  // undici's fetch wraps DNS/connection failures in a generic
+  // `TypeError: fetch failed` and puts the real reason on err.cause - check
+  // both the error and its cause for a recognizable code/name.
+  const cause = err.cause || {};
+  const name = err.name || cause.name;
+  const code = err.code || cause.code;
+  const message = `${err.message || ''} ${cause.message || ''}`;
+
+  if (name === 'AbortError' || name === 'TimeoutError') return 'timeout';
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'dns_error';
+  if (code === 'ECONNREFUSED') return 'connection_refused';
+  if (/certificate|SSL|TLS/i.test(message)) return 'tls_error';
   return 'unknown';
 }
 
@@ -96,12 +104,13 @@ async function pingUrl(url, { timeoutMs = 10000, fetchImpl = fetch } = {}) {
       error_message: up ? null : `Upstream responded with HTTP ${statusCode}`,
     };
   } catch (err) {
+    const detail = err.cause?.message ? `${err.message}: ${err.cause.message}` : err.message || String(err);
     return {
       status: 'down',
       status_code: null,
       latency_ms: null,
       error_type: classifyError(err),
-      error_message: String(err.message || err).slice(0, 256),
+      error_message: detail.slice(0, 256),
     };
   }
 }

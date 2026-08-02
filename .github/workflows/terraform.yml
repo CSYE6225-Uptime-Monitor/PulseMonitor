@@ -7,9 +7,9 @@ name: terraform
 on:
   push:
     branches: [main]
-    paths: ["infrastructure/**", ".github/workflows/terraform.yml"]
+    paths: ["infrastructure/**", "lambda/**", ".github/workflows/terraform.yml"]
   pull_request:
-    paths: ["infrastructure/**", ".github/workflows/terraform.yml"]
+    paths: ["infrastructure/**", "lambda/**", ".github/workflows/terraform.yml"]
 
 permissions:
   contents: read
@@ -45,3 +45,18 @@ jobs:
           terraform init -backend=false -input=false
           terraform validate
           terraform test
+
+  pinger:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lambda/pinger
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: npm ci
+      - run: npm test

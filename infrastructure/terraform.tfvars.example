@@ -8,6 +8,23 @@ vpc_cidr           = "10.0.0.0/16"
 availability_zones = ["us-east-1a", "us-east-1b"]
 domain_name        = "pulsemonitor.online"
 
+# Storage
+monitoring_history_retention_days = 90
+bucket_force_destroy              = false # set true only in dev/test
+
+# Monitoring (pinger)
+ping_schedule = "rate(5 minutes)"
+enable_alerts = false
+alert_email   = ""
+
+# Compute
+instance_type        = "t3.micro"
+ami_id                = null # defaults to the newest Packer AMI tagged Application=pulsemonitor-backend
+asg_min_size          = 2
+asg_max_size          = 4
+asg_desired_capacity  = 2
+certificate_arn       = null # set once the dns module provisions one
+
 tags = {
   Owner = "your-name"
 }

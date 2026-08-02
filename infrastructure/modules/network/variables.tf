@@ -29,7 +29,7 @@ variable "environment" {
 }
 
 variable "app_port" {
-  description = "Port the backend application listens on."
+  description = "Port on the app instances that the ALB forwards to (the nginx listener, which reverse-proxies to the Express app on 8080)."
   type        = number
-  default     = 8080
+  default     = 80
 }

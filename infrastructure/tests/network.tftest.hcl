@@ -1,6 +1,60 @@
 # Runs offline (mocked "aws" provider, no real AWS calls or credentials needed).
+#
+# aws_iam_role is mocked with a valid ARN shape: root-level apply runs build
+# the whole config (network + storage + monitoring), and the monitoring
+# module's aws_lambda_function.pinger.role argument is ARN-validated even
+# under mock_provider - an unmocked computed "arn" attribute is a random
+# string, which fails that validation.
+mock_provider "aws" {
+  mock_resource "aws_iam_role" {
+    defaults = {
+      arn = "arn:aws:iam::123456789012:role/mock-role"
+    }
+  }
 
-mock_provider "aws" {}
+  mock_resource "aws_lambda_function" {
+    defaults = {
+      arn = "arn:aws:lambda:us-east-1:123456789012:function:mock-function"
+    }
+  }
+
+  mock_resource "aws_cloudwatch_event_rule" {
+    defaults = {
+      arn = "arn:aws:events:us-east-1:123456789012:rule/mock-rule"
+    }
+  }
+
+  mock_resource "aws_iam_instance_profile" {
+    defaults = {
+      arn = "arn:aws:iam::123456789012:instance-profile/mock-profile"
+    }
+  }
+
+  mock_resource "aws_lb" {
+    defaults = {
+      arn      = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/mock-alb/1234567890123456"
+      dns_name = "mock-alb-123456789.us-east-1.elb.amazonaws.com"
+    }
+  }
+
+  mock_resource "aws_lb_target_group" {
+    defaults = {
+      arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/mock-tg/1234567890123456"
+    }
+  }
+
+  mock_resource "aws_launch_template" {
+    defaults = {
+      id = "lt-0123456789abcdef0"
+    }
+  }
+
+  mock_data "aws_ami" {
+    defaults = {
+      id = "ami-0123456789abcdef0"
+    }
+  }
+}
 
 run "subnet_cidrs_are_correct" {
   command = apply

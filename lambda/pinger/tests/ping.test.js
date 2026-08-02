@@ -81,6 +81,23 @@ describe('pingUrl', () => {
     expect(result.error_type).toBe('dns_error');
   });
 
+  it('classifies a DNS failure wrapped by undici\'s generic "fetch failed" error', async () => {
+    // Node's fetch (undici) wraps DNS/connection failures in a generic
+    // TypeError with the real reason on err.cause - this is what actually
+    // happens in production for unreachable hosts, not a plain err.code.
+    const fetchImpl = jest.fn(async () => {
+      const cause = new Error('getaddrinfo ENOTFOUND nosuchhost.invalid');
+      cause.code = 'ENOTFOUND';
+      const err = new TypeError('fetch failed');
+      err.cause = cause;
+      throw err;
+    });
+    const result = await pingUrl('https://nosuchhost.invalid', { fetchImpl });
+    expect(result.status).toBe('down');
+    expect(result.error_type).toBe('dns_error');
+    expect(result.error_message).toContain('ENOTFOUND');
+  });
+
   it('blocks a private-IP URL without calling fetch', async () => {
     dns.promises.lookup.mockResolvedValue({ address: '10.0.0.5', family: 4 });
     const fetchImpl = jest.fn();
