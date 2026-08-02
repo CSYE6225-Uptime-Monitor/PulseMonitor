@@ -1,0 +1,7 @@
+# Partial backend config for the root module's S3 backend.
+# Copy to backend.hcl (gitignored) and fill in with values from `bootstrap` outputs.
+#   terraform init -backend-config=backend.hcl
+
+bucket         = "pulsemonitor-tfstate"
+region         = "us-east-1"
+dynamodb_table = "pulsemonitor-tf-locks"
