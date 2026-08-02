@@ -1,0 +1,25 @@
+#!/bin/bash
+set -euxo pipefail
+exec > >(tee /var/log/user-data.log) 2>&1
+
+# The app, nginx, and systemd units are already installed on the AMI (see
+# packer/backend-ami.pkr.hcl). This script only writes the runtime
+# environment file - including the session secret pulled from SSM - and
+# starts the services.
+
+SECRET=$(aws ssm get-parameter --name "${session_secret_param}" --with-decryption \
+  --query Parameter.Value --output text --region ${region})
+
+cat >/etc/pulsemonitor/app.env <<EOF
+NODE_ENV=${node_env}
+PORT=${app_port}
+AWS_REGION=${region}
+USERS_TABLE=${users_table}
+SITES_TABLE=${sites_table}
+COOKIE_SECURE=${cookie_secure}
+SESSION_SECRET=$${SECRET}
+EOF
+chmod 0640 /etc/pulsemonitor/app.env
+chown root:pulsemonitor /etc/pulsemonitor/app.env
+
+systemctl start nginx pulsemonitor
