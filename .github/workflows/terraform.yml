@@ -1,0 +1,73 @@
+name: terraform
+
+# Validates the PulseMonitor infrastructure on every change.
+# Scaffolding sprint: format, validate, and test only — no init against a real
+# backend, no plan/apply, no AWS credentials required.
+
+on:
+  push:
+    branches: [main]
+    paths: ["infrastructure/**", "lambda/**", ".github/workflows/terraform.yml"]
+  pull_request:
+    paths: ["infrastructure/**", "lambda/**", ".github/workflows/terraform.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infrastructure
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.8"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # archive_file zips lambda/pinger/ during `terraform test`/`plan`, so
+      # node_modules must hold production deps only - mirrors the AMI's
+      # "npm ci --omit=dev" convention for the backend.
+      - name: Install pinger production dependencies
+        working-directory: lambda/pinger
+        run: npm ci --omit=dev
+
+      - name: Format check
+        run: terraform fmt -recursive -check
+
+      - name: Module scaffolding check
+        run: bash tests/structure.sh
+
+      - name: Validate and test root module
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+          terraform test
+
+      - name: Validate and test bootstrap
+        working-directory: infrastructure/bootstrap
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+          terraform test
+
+  pinger:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lambda/pinger
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: npm ci
+      - run: npm test
