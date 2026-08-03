@@ -14,7 +14,7 @@ const { doubleCsrfProtection, generateCsrfToken } = doubleCsrf({
   cookieOptions: {
     sameSite: 'lax',
     httpOnly: true,
-    secure: config.nodeEnv === 'production',
+    secure: config.cookieSecure,
   },
 });
 

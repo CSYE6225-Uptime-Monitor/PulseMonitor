@@ -21,6 +21,7 @@ router.post('/v1/login', doubleCsrfProtection, validate(loginSchema), async (req
       throw new AppError(401, 'Invalid email or password.');
     }
     req.session.email = user.email;
+    req.session.user_id = user.user_id;
     res.json({ success: true, data: user, error: null });
   } catch (error) {
     next(error);

@@ -6,8 +6,13 @@ const errorHandler = require('./middleware/errorHandler');
 const healthRoutes = require('./routes/health');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
+const siteRoutes = require('./routes/sites');
 
 const app = express();
+
+// Required behind nginx + the ALB: without it, req.secure and req.ip are
+// derived from the direct (loopback) connection instead of X-Forwarded-*.
+app.set('trust proxy', 1);
 
 app.use(express.json());
 app.use(cookieParser());
@@ -17,6 +22,7 @@ app.use('/', routes);
 app.use(healthRoutes);
 app.use(authRoutes);
 app.use(userRoutes);
+app.use(siteRoutes);
 
 app.use(errorHandler);
 

@@ -94,6 +94,7 @@ describe('user account API', () => {
     ddbMock.on(GetCommand).resolves({
       Item: {
         email: 'jane@example.com',
+        user_id: '55555555-5555-4555-8555-555555555555',
         password_hash: passwordHash,
         first_name: 'Jane',
         last_name: 'Doe',
@@ -133,7 +134,13 @@ describe('user account API', () => {
   it('scopes self to the session email, ignoring any email in the request body', async () => {
     const passwordHash = await bcrypt.hash('supersecret', 4);
     ddbMock.on(GetCommand).resolves({
-      Item: { email: 'jane@example.com', password_hash: passwordHash, first_name: 'Jane', last_name: 'Doe' },
+      Item: {
+        email: 'jane@example.com',
+        user_id: '66666666-6666-4666-8666-666666666666',
+        password_hash: passwordHash,
+        first_name: 'Jane',
+        last_name: 'Doe',
+      },
     });
 
     const agent = request.agent(app);
