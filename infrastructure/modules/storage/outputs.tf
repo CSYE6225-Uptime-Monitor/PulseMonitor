@@ -10,6 +10,16 @@ output "users_table_arn" {
   value       = aws_dynamodb_table.users.arn
 }
 
+output "users_user_id_index_name" {
+  description = "Name of the user_id-index GSI on the users table, used by the notifier to resolve a site's owner email from user_id."
+  value       = "user_id-index"
+}
+
+output "users_user_id_index_arn" {
+  description = "ARN of the user_id-index GSI, used to scope the notifier's IAM grant to the index rather than the base table."
+  value       = "${aws_dynamodb_table.users.arn}/index/user_id-index"
+}
+
 output "sites_table_name" {
   description = "Name of the DynamoDB sites table."
   value       = aws_dynamodb_table.sites.name

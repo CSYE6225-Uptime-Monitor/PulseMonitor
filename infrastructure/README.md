@@ -13,6 +13,7 @@ Terraform for the PulseMonitor AWS deployment (region `us-east-1`, domain
 | `compute` | Implemented — ALB, target group, HTTP/HTTPS-ready listeners, launch template (Packer AMI), ASG with instance refresh, EC2 instance role |
 | `dns` | Deferred to Sprint 4-5 — Route 53, ACM, WAF. The app runs on the ALB DNS name until then. |
 | Alerts (SNS + CloudWatch alarms) | Deferred to Sprint 4 — lands as an additive `modules/monitoring/alerts.tf`, gated by `enable_alerts`. |
+| Notifications (per-owner down/recovery email) | Implemented, off by default — custom EventBridge bus, notifier Lambda (`lambda/notifier/`), SES domain identity. Gated by `enable_notifications`; see [Site notifications](#site-notifications) below. |
 
 ## Layout
 
@@ -27,6 +28,7 @@ infrastructure/
 └── tests/                     # terraform test + structure check
 
 lambda/pinger/                 # pinger Lambda source, zipped by data.archive_file
+lambda/notifier/                # notifier Lambda source, zipped by data.archive_file
 packer/                        # Packer template that bakes the backend app + nginx into an AMI
 ```
 
@@ -67,6 +69,37 @@ Fixed-width `epoch_ms` means lexicographic order == chronological order
 within a day partition, so `ListObjectsV2` + `StartAfter` is a free
 pagination cursor for the history API. Body is JSON with `schema_version: 1`.
 Bounded by the 90-day lifecycle rule on the `sites/` prefix.
+
+### `users` table `user_id-index` GSI (hash key `user_id`, `KEYS_ONLY`)
+
+Lets the notifier resolve a site's owner email from `user_id` without a
+`Scan` and without base-table access - `KEYS_ONLY` projects the GSI's own key
+plus the base table's key (`email`), so the index contains exactly
+`{user_id, email}` and nothing else (not `password_hash`). Sparse: an
+account created before `user_id` existed simply has no entry until its next
+login (see `verifyCredentials` in `backend/src/services/userService.js`).
+
+### `SiteStatusChanged` EventBridge event (custom bus `pulsemonitor-{env}-site-events`)
+
+Published by the pinger only on a status *transition* (never on every failed
+check) - see `lambda/pinger/lib/events.js`. `Source: "pulsemonitor.pinger"`,
+`DetailType: "SiteStatusChanged"`. `detail`:
+
+| field | type | notes |
+|---|---|---|
+| `site_id`, `user_id`, `url`, `name` | S | copied from the scanned site |
+| `status` | S | `"up"` \| `"down"` - the new status |
+| `previous_status` | S \| null | `null` (not omitted) on a site's first check |
+| `previous_status_change_at` | S \| null | used by the notifier to compute downtime on recovery |
+| `status_code`, `latency_ms`, `error_type`, `error_message` | - | the ping result, same shapes as the `sites` table |
+| `checked_at` | S | ISO-8601 UTC with ms |
+
+Two rules consume this: `site-down` matches `status: ["down"]` (deliberately
+not constraining `previous_status`, so a newly added site that's already
+down still alerts), and `site-recovered` matches `status: ["up"]` **and**
+`previous_status: ["down"]` (so a brand-new site's first successful check —
+where `previous_status` is JSON `null` — never triggers a false "recovered"
+email).
 
 ## Port chain (compute)
 
@@ -134,7 +167,7 @@ Bootstrap has been applied. Deployed resources:
 | Resource | Name | ARN |
 |---|---|---|
 | S3 bucket | `pulsemonitor-tfstate` | `arn:aws:s3:::pulsemonitor-tfstate` |
-| DynamoDB table | `pulsemonitor-tf-locks` | `arn:aws:dynamodb:us-east-1:713545429375:table/pulsemonitor-tf-locks` |
+| DynamoDB table | `pulsemonitor-tf-locks` | `arn:aws:dynamodb:us-east-1:611467706761:table/pulsemonitor-tf-locks` |
 
 Region: `us-east-1`. Versioning and AES256 encryption confirmed on the
 bucket; public access fully blocked.
@@ -149,6 +182,43 @@ cd ..
 cp backend.hcl.example backend.hcl      # fill in bootstrap outputs
 terraform init -backend-config=backend.hcl
 ```
+
+## Site notifications
+
+Set `enable_notifications = true` plus `notification_sender_domain` and
+`notification_sender_email` (see `terraform.tfvars.example`) to turn on
+per-owner down/recovery emails. Everything is additive and gated by
+`enable_notifications` - disabled is the default, and the whole pipeline
+(custom bus, both rules, notifier Lambda, DLQ, SES identities) doesn't exist
+in the plan when it's off.
+
+**`terraform apply` succeeds while SES verification is still pending** - this
+is the trap to know about. Domain identities can't be verified by Terraform
+(there's no waiter for it); a human has to publish DNS records first:
+
+1. `terraform apply`, then read the `ses_dkim_tokens` output - 3 CNAME
+   records (name -> value).
+2. Publish all 3 at the domain registrar for `notification_sender_domain`.
+3. Poll until verified (DNS propagation, not instant):
+   ```bash
+   aws sesv2 get-email-identity --email-identity <notification_sender_domain>
+   # wait for VerifiedForSendingStatus: true
+   ```
+4. Until then, and until AWS grants **SES production access** (a support
+   request - see `aws sesv2 get-account`), the account is in the sandbox:
+   only verified recipient identities can receive mail. Verify test
+   addresses via `notification_verified_recipients` (each needs a
+   manual click-through on the email AWS sends), or set
+   `notification_override_recipient` to redirect every notification to one
+   verified mailbox for end-to-end testing (forbidden when
+   `environment = "prod"` - see the variable's validation in
+   `modules/monitoring/variables.tf`).
+
+A failed send is either swallowed (permanent: unverified recipient,
+suspended account - logged + an EMF `NotificationFailed` metric, see
+`lambda/notifier/lib/email.js::isPermanentRejection`) or retried by Lambda
+and, if still failing, lands in the `notifier-dlq` SQS queue
+(`notifier_dlq_url` output).
 
 ## CI
 

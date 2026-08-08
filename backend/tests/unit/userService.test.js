@@ -124,6 +124,55 @@ describe('userService', () => {
       expect(result.user_id).toBe(updates.user_id);
     });
 
+    it('conditions the backfill on attribute_not_exists(user_id) to prevent a lost update', async () => {
+      const passwordHash = await bcrypt.hash('correct-password', 4);
+      userRepository.findByEmail.mockResolvedValue({
+        email: 'jane@example.com',
+        password_hash: passwordHash,
+        first_name: 'Jane',
+        last_name: 'Doe',
+      });
+      userRepository.update.mockImplementation(async (email, updates) => ({
+        email,
+        password_hash: passwordHash,
+        first_name: 'Jane',
+        last_name: 'Doe',
+        ...updates,
+      }));
+
+      await userService.verifyCredentials('jane@example.com', 'correct-password');
+
+      const [, , options] = userRepository.update.mock.calls[0];
+      expect(options.conditionExpression).toBe('attribute_not_exists(user_id)');
+    });
+
+    it('re-reads and uses the winning user_id when two concurrent logins race the backfill', async () => {
+      const passwordHash = await bcrypt.hash('correct-password', 4);
+      userRepository.findByEmail
+        .mockResolvedValueOnce({
+          email: 'jane@example.com',
+          password_hash: passwordHash,
+          first_name: 'Jane',
+          last_name: 'Doe',
+        })
+        .mockResolvedValueOnce({
+          email: 'jane@example.com',
+          user_id: 'winning-id',
+          password_hash: passwordHash,
+          first_name: 'Jane',
+          last_name: 'Doe',
+        });
+
+      const conditionalError = new Error('conditional check failed');
+      conditionalError.name = 'ConditionalCheckFailedException';
+      userRepository.update.mockRejectedValue(conditionalError);
+
+      const result = await userService.verifyCredentials('jane@example.com', 'correct-password');
+
+      expect(result.user_id).toBe('winning-id');
+      expect(userRepository.findByEmail).toHaveBeenCalledTimes(2);
+    });
+
     it('does not rewrite an existing user_id at login', async () => {
       const passwordHash = await bcrypt.hash('correct-password', 4);
       userRepository.findByEmail.mockResolvedValue({

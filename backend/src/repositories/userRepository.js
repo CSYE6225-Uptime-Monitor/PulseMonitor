@@ -26,7 +26,7 @@ async function create(user) {
   }
 }
 
-async function update(email, updates) {
+async function update(email, updates, { conditionExpression } = {}) {
   const now = new Date().toISOString();
   const names = { '#updated_at': 'updated_at' };
   const values = { ':updated_at': now };
@@ -46,6 +46,7 @@ async function update(email, updates) {
       ExpressionAttributeNames: names,
       ExpressionAttributeValues: values,
       ReturnValues: 'ALL_NEW',
+      ...(conditionExpression ? { ConditionExpression: conditionExpression } : {}),
     })
   );
 

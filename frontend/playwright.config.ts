@@ -4,16 +4,24 @@ import { defineConfig, devices } from "@playwright/test";
 // Requires LocalStack running (see backend/docker-compose.yml) providing both
 // DynamoDB and S3 on port 4566. globalSetup creates the tables/buckets
 // idempotently, so no manual setup step is required beyond `docker compose up`.
+//
+// When PLAYWRIGHT_BASE_URL is set the suite runs against an already-deployed
+// stack (e.g. the production ALB): no LocalStack to provision tables in, and
+// no local servers to start - the DynamoDB tables, S3 buckets, Express, and
+// Next are all already live behind that URL.
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+const isRemote = Boolean(process.env.PLAYWRIGHT_BASE_URL);
+
 export default defineConfig({
   testDir: "./e2e",
-  globalSetup: require.resolve("./e2e/global-setup"),
+  globalSetup: isRemote ? undefined : require.resolve("./e2e/global-setup"),
   fullyParallel: false,
   workers: 1,
   reporter: "list",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL,
   },
-  webServer: [
+  webServer: isRemote ? undefined : [
     {
       command: "node server.js",
       cwd: path.join(__dirname, "../backend"),

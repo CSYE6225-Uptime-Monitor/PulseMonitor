@@ -17,6 +17,14 @@ ping_schedule = "rate(5 minutes)"
 enable_alerts = false
 alert_email   = ""
 
+# Notifications (site down/recovery emails, per-owner via SES)
+enable_notifications              = false
+notification_sender_identity_type = "domain" # or "email" - one address, verified by click-through, zero DNS
+notification_sender_domain        = "" # e.g. "pulsemonitor.online" - must be a domain you control; publish the 3 DKIM CNAMEs from the ses_dkim_tokens output at your registrar
+notification_sender_email         = "" # e.g. "alerts@pulsemonitor.online" - must be an address at notification_sender_domain in "domain" mode, or the identity itself in "email" mode
+notification_override_recipient   = "" # sandbox testing only; forbidden when environment = "prod"
+notification_verified_recipients  = [] # sandbox testing only; each requires a manual click-through
+
 # Compute
 instance_type        = "t3.micro"
 ami_id                = null # defaults to the newest Packer AMI tagged Application=pulsemonitor-backend

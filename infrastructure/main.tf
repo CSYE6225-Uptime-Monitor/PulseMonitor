@@ -28,12 +28,22 @@ module "monitoring" {
   environment                   = var.environment
   sites_table_name              = module.storage.sites_table_name
   sites_table_arn               = module.storage.sites_table_arn
+  users_table_name              = module.storage.users_table_name
+  users_table_arn               = module.storage.users_table_arn
+  users_user_id_index_arn       = module.storage.users_user_id_index_arn
   monitoring_history_bucket     = module.storage.monitoring_history_bucket_name
   monitoring_history_bucket_arn = module.storage.monitoring_history_bucket_arn
   history_prefix                = var.history_prefix
   ping_schedule                 = var.ping_schedule
   enable_alerts                 = var.enable_alerts
   alert_email                   = var.alert_email
+
+  enable_notifications              = var.enable_notifications
+  notification_sender_identity_type = var.notification_sender_identity_type
+  notification_sender_domain        = var.notification_sender_domain
+  notification_sender_email         = var.notification_sender_email
+  notification_override_recipient   = var.notification_override_recipient
+  notification_verified_recipients  = var.notification_verified_recipients
 }
 
 module "compute" {

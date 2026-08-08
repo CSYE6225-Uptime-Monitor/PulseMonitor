@@ -17,6 +17,16 @@ variable "instance_type" {
   default = "t3.micro"
 }
 
+# Left empty lets the Amazon EBS builder auto-resolve a subnet in the
+# region's default VPC (the normal case). Set explicitly only when that
+# resolution fails - e.g. a default VPC whose subnets exist but aren't
+# marked DefaultForAz (so "no subnet_id, no vpc_id" finds nothing):
+# `packer build -var="subnet_id=subnet-xxxx" backend-ami.pkr.hcl`.
+variable "subnet_id" {
+  type    = string
+  default = ""
+}
+
 # Bakes the backend Express app + nginx into an AMI so instances boot without
 # any GitHub/npm-registry dependency - user-data only needs to fetch the
 # session secret from SSM and start the already-installed systemd units.
@@ -24,6 +34,7 @@ source "amazon-ebs" "backend" {
   region        = var.aws_region
   instance_type = var.instance_type
   ssh_username  = "ec2-user"
+  subnet_id     = var.subnet_id != "" ? var.subnet_id : null
 
   source_ami_filter {
     filters = {
@@ -62,15 +73,35 @@ build {
     ]
   }
 
-  # Built with `npm ci --omit=dev` in backend/ before running `packer build`,
-  # so node_modules is already production-only when it lands on the AMI.
+  # Packer's file provisioner transfers a directory as one SCP put per file,
+  # and node_modules-heavy trees (thousands of small files) reliably trip
+  # "wait: remote command exited without exit status or exit signal" on that
+  # many back-to-back puts over one SSH channel. A single tarball transfer
+  # sidesteps it entirely - tar preserves the relative symlinks under
+  # node_modules/.bin/ the same way the old recursive copy did.
+  #
+  # The tarballs are built OUTSIDE Packer (see build/README or the infra
+  # README's deploy steps) rather than via a shell-local provisioner here:
+  # the file provisioner validates that its source exists at config-parse
+  # time, before any provisioner has run, so a shell-local step earlier in
+  # this same build block cannot produce a file in time for it.
+  #   tar -czf build/pulsemonitor-backend.tar.gz -C ../backend .
+  #   mkdir -p build/frontend-stage/.next
+  #   cp -r ../frontend/.next/standalone/. build/frontend-stage/
+  #   cp -r ../frontend/.next/static build/frontend-stage/.next/static
+  #   cp -r ../frontend/public build/frontend-stage/public
+  #   tar -czf build/pulsemonitor-frontend.tar.gz -C build/frontend-stage .
   provisioner "file" {
-    source      = "../backend/"
-    destination = "/tmp/pulsemonitor-backend"
+    source      = "build/pulsemonitor-backend.tar.gz"
+    destination = "/tmp/pulsemonitor-backend.tar.gz"
   }
 
+  # Built with `npm ci --omit=dev` in backend/ before running `packer build`,
+  # so node_modules is already production-only when it lands on the AMI.
   provisioner "shell" {
     inline = [
+      "mkdir -p /tmp/pulsemonitor-backend",
+      "tar -xzf /tmp/pulsemonitor-backend.tar.gz -C /tmp/pulsemonitor-backend",
       "sudo rm -rf /opt/pulsemonitor/*",
       "sudo cp -r /tmp/pulsemonitor-backend/. /opt/pulsemonitor/",
       "sudo rm -rf /opt/pulsemonitor/.env /opt/pulsemonitor/tests /opt/pulsemonitor/coverage",
@@ -82,30 +113,16 @@ build {
   # build` (produces .next/standalone/, which bundles only the frontend's
   # production deps - see frontend/next.config.ts's `output: "standalone"`).
   # standalone output doesn't copy static assets itself, so those are staged
-  # into it here rather than shipped as separate top-level directories.
-  provisioner "shell" {
-    inline = [
-      "mkdir -p /tmp/pulsemonitor-frontend/.next/static /tmp/pulsemonitor-frontend/public",
-    ]
-  }
-
+  # into the same tarball rather than shipped as separate top-level dirs.
   provisioner "file" {
-    source      = "../frontend/.next/standalone/"
-    destination = "/tmp/pulsemonitor-frontend"
-  }
-
-  provisioner "file" {
-    source      = "../frontend/.next/static/"
-    destination = "/tmp/pulsemonitor-frontend/.next/static"
-  }
-
-  provisioner "file" {
-    source      = "../frontend/public/"
-    destination = "/tmp/pulsemonitor-frontend/public"
+    source      = "build/pulsemonitor-frontend.tar.gz"
+    destination = "/tmp/pulsemonitor-frontend.tar.gz"
   }
 
   provisioner "shell" {
     inline = [
+      "mkdir -p /tmp/pulsemonitor-frontend",
+      "tar -xzf /tmp/pulsemonitor-frontend.tar.gz -C /tmp/pulsemonitor-frontend",
       "sudo rm -rf /opt/pulsemonitor-frontend/*",
       "sudo cp -r /tmp/pulsemonitor-frontend/. /opt/pulsemonitor-frontend/",
       "sudo chown -R pulsemonitor:pulsemonitor /opt/pulsemonitor-frontend",

@@ -20,6 +20,21 @@ variable "sites_table_arn" {
   type        = string
 }
 
+variable "users_table_name" {
+  description = "Name of the DynamoDB users table, used by the notifier to resolve a site's owner email."
+  type        = string
+}
+
+variable "users_table_arn" {
+  description = "ARN of the DynamoDB users table (base table, not the index). The notifier's IAM grant is scoped to the users_user_id_index_arn instead."
+  type        = string
+}
+
+variable "users_user_id_index_arn" {
+  description = "ARN of the user_id-index GSI on the users table. The notifier's IAM policy is scoped to this index ARN, not the base table."
+  type        = string
+}
+
 variable "monitoring_history_bucket" {
   description = "Name of the S3 bucket the pinger appends history records to."
   type        = string
@@ -72,6 +87,25 @@ variable "lambda_memory_mb" {
   validation {
     condition     = var.lambda_memory_mb >= 128 && var.lambda_memory_mb <= 10240
     error_message = "lambda_memory_mb must be between 128 and 10240."
+  }
+}
+
+# -1, not 1: AWS rejects any reserved_concurrent_executions that would leave
+# the account with fewer than 100 unreserved executions, and this account's
+# "Concurrent executions" quota (L-B99A9384) is still at 10 rather than the
+# default 1000 - so no reservation at all is legal today. -1 is the
+# provider's "no reservation" sentinel. Raise the quota, then set this to 1,
+# to restore the original intent: keeping a multi-site outage from firing a
+# burst of concurrent notifier invocations against the SES sandbox's 1
+# msg/sec ceiling (and keeping the pinger single-flight).
+variable "lambda_reserved_concurrency" {
+  description = "reserved_concurrent_executions for the pinger and notifier Lambdas. -1 means no reservation (the provider default). A positive value requires the account's unreserved concurrency to stay >= 100."
+  type        = number
+  default     = -1
+
+  validation {
+    condition     = var.lambda_reserved_concurrency == -1 || var.lambda_reserved_concurrency >= 1
+    error_message = "lambda_reserved_concurrency must be -1 (unreserved) or a positive integer."
   }
 }
 
@@ -136,4 +170,82 @@ variable "alert_email" {
     condition     = !var.enable_alerts || var.alert_email != ""
     error_message = "alert_email is required when enable_alerts is true."
   }
+}
+
+# Per-owner site down/recovery emails, distinct from enable_alerts above:
+# enable_alerts is the Sprint-4 operator-facing SNS topic; this is the
+# per-user SES notification path (custom EventBridge bus -> notifier Lambda).
+variable "enable_notifications" {
+  description = "Whether to provision the site down/recovery notification pipeline (custom EventBridge bus, notifier Lambda, SES)."
+  type        = bool
+  default     = false
+}
+
+# "email" is the zero-DNS path: one address, one click-through on the mail
+# SES sends, and SES then requires the From address to BE that identity
+# (hence local.sender_identity in notifications.tf, which cannot drift from
+# notification_sender_email). "domain" is the Route-53-era path: 3 CNAMEs to
+# publish, no click-through, and any From address at the domain is allowed.
+variable "notification_sender_identity_type" {
+  description = "Whether the SES sender identity is a single verified email address (\"email\") or a whole domain with Easy DKIM (\"domain\")."
+  type        = string
+  default     = "domain"
+
+  validation {
+    condition     = contains(["email", "domain"], var.notification_sender_identity_type)
+    error_message = "notification_sender_identity_type must be either \"email\" or \"domain\"."
+  }
+}
+
+variable "notification_sender_domain" {
+  description = "SES domain identity used to send notification emails (Easy DKIM, verified via 3 CNAME records published at the registrar). Required when enable_notifications is true and notification_sender_identity_type is \"domain\"."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = !var.enable_notifications || var.notification_sender_identity_type != "domain" || var.notification_sender_domain != ""
+    error_message = "notification_sender_domain is required when enable_notifications is true and notification_sender_identity_type is \"domain\"."
+  }
+}
+
+variable "notification_sender_email" {
+  description = "From address for notification emails. In \"domain\" mode this must be an address at notification_sender_domain; in \"email\" mode this IS the SES identity that gets verified."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = !var.enable_notifications || var.notification_sender_email != ""
+    error_message = "notification_sender_email is required when enable_notifications is true."
+  }
+}
+
+variable "notification_override_recipient" {
+  description = "Sandbox escape hatch: when set, every notification is redirected to this one verified mailbox, with the intended recipient rendered into the subject/body. Forbidden in prod."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.environment != "prod" || var.notification_override_recipient == ""
+    error_message = "notification_override_recipient must not be set in prod - it would silently redirect every real user's notification to one mailbox."
+  }
+}
+
+variable "notification_verified_recipients" {
+  description = "Extra SES email-identity recipients to verify for sandbox testing (each requires a manual click-through)."
+  type        = list(string)
+  default     = []
+
+  # In email mode aws_sesv2_email_identity.sender already manages this exact
+  # SES identity; listing it here too would make two Terraform resources
+  # fight over one identity and fail the apply with AlreadyExistsException.
+  validation {
+    condition     = var.notification_sender_identity_type != "email" || !contains(var.notification_verified_recipients, var.notification_sender_email)
+    error_message = "notification_sender_email must not also appear in notification_verified_recipients when notification_sender_identity_type is \"email\" - the sender identity already verifies that mailbox as a recipient."
+  }
+}
+
+variable "notifier_log_retention_days" {
+  description = "CloudWatch log group retention for the notifier function, in days."
+  type        = number
+  default     = 14
 }

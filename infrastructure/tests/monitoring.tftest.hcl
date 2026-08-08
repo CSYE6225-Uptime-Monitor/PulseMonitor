@@ -60,6 +60,15 @@ mock_provider "aws" {
 run "monitoring_outputs_are_wired" {
   command = apply
 
+  # Pinned rather than left to the default: this run exercises the full
+  # root config (no module {} override), so it's exposed to whatever a
+  # developer's local terraform.tfvars sets for identically-named root
+  # variables - and this test isn't mocking the SQS/SES resources that
+  # enable_notifications=true would pull in.
+  variables {
+    enable_notifications = false
+  }
+
   assert {
     condition     = module.monitoring.pinger_function_arn != null
     error_message = "Monitoring module should output the pinger function ARN."
@@ -88,6 +97,9 @@ run "pinger_lambda_is_configured" {
     environment                   = "dev"
     sites_table_name              = "pulsemonitor-dev-sites"
     sites_table_arn               = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-sites"
+    users_table_name              = "pulsemonitor-dev-users"
+    users_table_arn               = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-users"
+    users_user_id_index_arn       = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-users/index/user_id-index"
     monitoring_history_bucket     = "pulsemonitor-dev-monitoring-history-123456789012"
     monitoring_history_bucket_arn = "arn:aws:s3:::pulsemonitor-dev-monitoring-history-123456789012"
   }
@@ -108,8 +120,8 @@ run "pinger_lambda_is_configured" {
   }
 
   assert {
-    condition     = aws_lambda_function.pinger.reserved_concurrent_executions == 1
-    error_message = "Pinger Lambda should be limited to one concurrent execution."
+    condition     = aws_lambda_function.pinger.reserved_concurrent_executions == -1
+    error_message = "Pinger Lambda must default to unreserved concurrency (-1): a reservation is illegal while the account's concurrent-executions quota is below 100 + the reservation."
   }
 
   assert {
@@ -130,6 +142,9 @@ run "schedule_invokes_the_pinger_every_five_minutes" {
     environment                   = "dev"
     sites_table_name              = "pulsemonitor-dev-sites"
     sites_table_arn               = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-sites"
+    users_table_name              = "pulsemonitor-dev-users"
+    users_table_arn               = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-users"
+    users_user_id_index_arn       = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-users/index/user_id-index"
     monitoring_history_bucket     = "pulsemonitor-dev-monitoring-history-123456789012"
     monitoring_history_bucket_arn = "arn:aws:s3:::pulsemonitor-dev-monitoring-history-123456789012"
   }
@@ -167,6 +182,9 @@ run "log_group_is_explicit_and_retained" {
     environment                   = "dev"
     sites_table_name              = "pulsemonitor-dev-sites"
     sites_table_arn               = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-sites"
+    users_table_name              = "pulsemonitor-dev-users"
+    users_table_arn               = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-users"
+    users_user_id_index_arn       = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-users/index/user_id-index"
     monitoring_history_bucket     = "pulsemonitor-dev-monitoring-history-123456789012"
     monitoring_history_bucket_arn = "arn:aws:s3:::pulsemonitor-dev-monitoring-history-123456789012"
   }
@@ -197,8 +215,17 @@ run "pinger_role_is_least_privilege" {
     environment                   = "dev"
     sites_table_name              = "pulsemonitor-dev-sites"
     sites_table_arn               = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-sites"
+    users_table_name              = "pulsemonitor-dev-users"
+    users_table_arn               = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-users"
+    users_user_id_index_arn       = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-users/index/user_id-index"
     monitoring_history_bucket     = "pulsemonitor-dev-monitoring-history-123456789012"
     monitoring_history_bucket_arn = "arn:aws:s3:::pulsemonitor-dev-monitoring-history-123456789012"
+    # Pinned: a module-level run that doesn't set enable_notifications still
+    # inherits a developer's local terraform.tfvars value for it (terraform
+    # test applies root tfvars by name even into module { source = ... }
+    # runs), and this file's mock_provider doesn't mock the SQS/SES
+    # resources that enable_notifications=true would pull in.
+    enable_notifications = false
   }
 
   assert {
@@ -250,6 +277,9 @@ run "ping_schedule_default_matches_the_api_minimum_check_frequency" {
     environment                   = "dev"
     sites_table_name              = "pulsemonitor-dev-sites"
     sites_table_arn               = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-sites"
+    users_table_name              = "pulsemonitor-dev-users"
+    users_table_arn               = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-users"
+    users_user_id_index_arn       = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-users/index/user_id-index"
     monitoring_history_bucket     = "pulsemonitor-dev-monitoring-history-123456789012"
     monitoring_history_bucket_arn = "arn:aws:s3:::pulsemonitor-dev-monitoring-history-123456789012"
   }
@@ -272,6 +302,9 @@ run "rejects_ping_timeout_longer_than_lambda_timeout" {
     environment                   = "dev"
     sites_table_name              = "pulsemonitor-dev-sites"
     sites_table_arn               = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-sites"
+    users_table_name              = "pulsemonitor-dev-users"
+    users_table_arn               = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-users"
+    users_user_id_index_arn       = "arn:aws:dynamodb:us-east-1:123456789012:table/pulsemonitor-dev-users/index/user_id-index"
     monitoring_history_bucket     = "pulsemonitor-dev-monitoring-history-123456789012"
     monitoring_history_bucket_arn = "arn:aws:s3:::pulsemonitor-dev-monitoring-history-123456789012"
     ping_timeout_ms               = 300000

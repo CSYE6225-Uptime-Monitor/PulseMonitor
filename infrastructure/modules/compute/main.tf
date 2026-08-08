@@ -325,7 +325,11 @@ resource "aws_launch_template" "app" {
   block_device_mappings {
     device_name = "/dev/xvda"
     ebs {
-      volume_size           = 20
+      # Must be >= the source AMI's snapshot size or CreateAutoScalingGroup
+      # rejects the launch template outright (EBS never shrinks a volume
+      # below the snapshot it's restored from). The al2023-ami-*-x86_64
+      # Packer resolves to currently snapshots at 30GB.
+      volume_size           = 30
       volume_type           = "gp3"
       encrypted             = true
       delete_on_termination = true

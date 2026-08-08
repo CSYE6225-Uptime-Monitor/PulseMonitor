@@ -94,6 +94,45 @@ variable "alert_email" {
   default     = ""
 }
 
+# Per-owner site down/recovery emails, distinct from enable_alerts above:
+# enable_alerts is the Sprint-4 operator-facing SNS topic; this is the
+# per-user SES notification path (custom EventBridge bus -> notifier Lambda).
+variable "enable_notifications" {
+  description = "Whether to provision the site down/recovery notification pipeline (custom EventBridge bus, notifier Lambda, SES)."
+  type        = bool
+  default     = false
+}
+
+variable "notification_sender_identity_type" {
+  description = "Whether the SES sender identity is a single verified email address (\"email\", zero DNS work) or a whole domain with Easy DKIM (\"domain\")."
+  type        = string
+  default     = "domain"
+}
+
+variable "notification_sender_domain" {
+  description = "SES domain identity used to send notification emails (Easy DKIM). Required when enable_notifications is true."
+  type        = string
+  default     = ""
+}
+
+variable "notification_sender_email" {
+  description = "From address for notification emails, e.g. alerts@pulsemonitor.online. Must be an address at notification_sender_domain."
+  type        = string
+  default     = ""
+}
+
+variable "notification_override_recipient" {
+  description = "Sandbox escape hatch: when set, every notification is redirected to this one verified mailbox. Forbidden in prod."
+  type        = string
+  default     = ""
+}
+
+variable "notification_verified_recipients" {
+  description = "Extra SES email-identity recipients to verify for sandbox testing."
+  type        = list(string)
+  default     = []
+}
+
 variable "instance_type" {
   description = "EC2 instance type for app instances."
   type        = string

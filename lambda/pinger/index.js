@@ -1,11 +1,13 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient } = require('@aws-sdk/lib-dynamodb');
 const { S3Client } = require('@aws-sdk/client-s3');
+const { EventBridgeClient } = require('@aws-sdk/client-eventbridge');
 
 const { pingUrl } = require('./lib/ping');
 const { scanDueSites, writeSiteStatus } = require('./lib/sites');
 const { writeHistoryRecord } = require('./lib/history');
 const { emitSiteDownMetric } = require('./lib/metrics');
+const { publishStatusChanges } = require('./lib/events');
 
 function readEnv() {
   const required = ['SITES_TABLE', 'HISTORY_BUCKET'];
@@ -24,6 +26,11 @@ function readEnv() {
     environment: process.env.ENVIRONMENT || 'dev',
     dynamoEndpoint: process.env.DYNAMODB_ENDPOINT,
     s3Endpoint: process.env.S3_ENDPOINT,
+    // Optional and deliberately not in `required`: absent means
+    // notifications are disabled, and publishStatusChanges() is a no-op
+    // without a bus name.
+    eventBusName: process.env.EVENT_BUS_NAME,
+    eventBridgeEndpoint: process.env.EVENTBRIDGE_ENDPOINT,
   };
 }
 
@@ -35,7 +42,10 @@ function makeClients(config) {
   const s3Client = new S3Client({
     ...(config.s3Endpoint ? { endpoint: config.s3Endpoint, forcePathStyle: true } : {}),
   });
-  return { docClient, s3Client };
+  const eventBridgeClient = new EventBridgeClient({
+    ...(config.eventBridgeEndpoint ? { endpoint: config.eventBridgeEndpoint } : {}),
+  });
+  return { docClient, s3Client, eventBridgeClient };
 }
 
 // Runs `worker` over `items` with at most `concurrency` in flight at once,
@@ -60,8 +70,9 @@ async function checkSite(site, { docClient, s3Client, config }) {
   const checkedAt = new Date().toISOString();
   const result = await pingUrl(site.url, { timeoutMs: config.pingTimeoutMs });
 
+  let transition;
   try {
-    await writeSiteStatus(docClient, config.sitesTable, {
+    transition = await writeSiteStatus(docClient, config.sitesTable, {
       userId: site.user_id,
       siteId: site.site_id,
       previousStatus: site.status,
@@ -100,12 +111,18 @@ async function checkSite(site, { docClient, s3Client, config }) {
     isDown: result.status === 'down',
   });
 
-  return { siteId: site.site_id, status: result.status };
+  return {
+    siteId: site.site_id,
+    status: result.status,
+    // Only carried on a real transition - collected into the publish batch
+    // by handler() and stripped from the public results array below.
+    change: transition?.statusChanged ? { site, result, transition, checkedAt } : undefined,
+  };
 }
 
 async function handler(event, context) {
   const config = readEnv();
-  const { docClient, s3Client } = makeClients(config);
+  const { docClient, s3Client, eventBridgeClient } = makeClients(config);
 
   const sites = await scanDueSites(docClient, config.sitesTable);
 
@@ -114,10 +131,26 @@ async function handler(event, context) {
 
   const results = await runPool(sites, config.maxConcurrency, (site) => checkSite(site, { docClient, s3Client, config }), shouldStop);
 
+  const changes = results.filter((r) => r?.change).map((r) => r.change);
+
+  // publishStatusChanges() is designed to never throw, but a throw here must
+  // never fail the ping cycle regardless - DynamoDB and S3 are already
+  // written by this point, so the only thing at risk is the notification.
+  try {
+    await publishStatusChanges(eventBridgeClient, {
+      busName: config.eventBusName,
+      changes,
+      metricNamespace: config.metricNamespace,
+      environment: config.environment,
+    });
+  } catch (err) {
+    // Swallowed deliberately - see comment above.
+  }
+
   return {
     checked: results.filter(Boolean).length,
     total: sites.length,
-    results,
+    results: results.map((r) => (r ? { siteId: r.siteId, ...(r.skipped ? { skipped: true } : { status: r.status }) } : r)),
   };
 }
 

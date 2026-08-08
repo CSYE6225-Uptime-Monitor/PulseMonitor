@@ -37,6 +37,23 @@ resource "aws_dynamodb_table" "users" {
     type = "S"
   }
 
+  attribute {
+    name = "user_id"
+    type = "S"
+  }
+
+  # KEYS_ONLY is deliberate: a GSI always projects the base table's key
+  # (email) alongside its own, so this index already contains everything the
+  # notifier needs ({user_id, email}) without replicating password_hash into
+  # a second physical location. It also means the notifier's IAM grant can be
+  # scoped to this index ARN alone - a Query against it cannot return
+  # password_hash even if the policy were ever broadened by mistake.
+  global_secondary_index {
+    name            = "user_id-index"
+    hash_key        = "user_id"
+    projection_type = "KEYS_ONLY"
+  }
+
   server_side_encryption {
     enabled = true
   }
