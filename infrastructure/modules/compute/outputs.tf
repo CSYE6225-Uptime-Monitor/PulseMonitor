@@ -54,3 +54,8 @@ output "app_url" {
   description = "HTTP URL of the ALB (until the DNS/ACM module is live)."
   value       = "http://${aws_lb.this.dns_name}"
 }
+
+output "https_listener_arn" {
+  description = "ARN of the HTTPS listener. Null when enable_https is false."
+  value       = one(aws_lb_listener.https[*].arn)
+}

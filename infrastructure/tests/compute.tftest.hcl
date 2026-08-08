@@ -99,6 +99,11 @@ run "user_data_wires_the_history_bucket" {
     condition     = strcontains(base64decode(aws_launch_template.app.user_data), "AUDIT_PREFIX=audit")
     error_message = "user_data must write AUDIT_PREFIX with its default value."
   }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "COOKIE_SECURE=false")
+    error_message = "user_data must default COOKIE_SECURE to false - the HTTP listener still forwards plaintext by default, and a Secure cookie sent over it is silently dropped by the browser."
+  }
 }
 
 run "user_data_configures_the_cloudwatch_agent" {
@@ -210,6 +215,16 @@ run "listener_is_http_only_without_a_certificate" {
     source = "./modules/compute"
   }
 
+  # Pinned rather than left to the default: certificate_arn is a root
+  # variable name as well as a compute one, and terraform test applies root
+  # tfvars by name even into module { source = ... } runs. A developer with a
+  # real cert ARN in their terraform.tfvars would otherwise turn the
+  # assertions below into silent inversions of what they claim to test.
+  variables {
+    certificate_arn = null
+    enable_https    = false
+  }
+
   assert {
     condition     = aws_lb_listener.http.port == 80
     error_message = "HTTP listener should be on port 80."
@@ -217,12 +232,12 @@ run "listener_is_http_only_without_a_certificate" {
 
   assert {
     condition     = aws_lb_listener.http.default_action[0].type == "forward"
-    error_message = "HTTP listener should forward directly when no certificate is configured."
+    error_message = "HTTP listener should forward directly when enable_https is false."
   }
 
   assert {
     condition     = length(aws_lb_listener.https) == 0
-    error_message = "HTTPS listener should not exist when certificate_arn is null."
+    error_message = "HTTPS listener should not exist when enable_https is false."
   }
 }
 
@@ -235,21 +250,66 @@ run "listener_redirects_to_https_when_certificate_present" {
 
   variables {
     certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc-123"
+    enable_https    = true
   }
 
   assert {
     condition     = aws_lb_listener.http.default_action[0].type == "redirect"
-    error_message = "HTTP listener should redirect to HTTPS once a certificate is configured."
+    error_message = "HTTP listener should redirect to HTTPS once enable_https is true."
+  }
+
+  assert {
+    condition     = aws_lb_listener.http.default_action[0].redirect[0].status_code == "HTTP_301"
+    error_message = "The HTTP->HTTPS redirect must be a permanent 301, or clients keep re-requesting over plaintext."
+  }
+
+  assert {
+    condition     = aws_lb_listener.http.default_action[0].redirect[0].port == "443"
+    error_message = "The redirect must target port 443."
+  }
+
+  assert {
+    condition     = lookup(aws_lb_listener.http.default_action[0], "target_group_arn", null) == null
+    error_message = "Once enable_https is true the HTTP listener must not also forward - a listener with both actions would serve the app in plaintext alongside the redirect."
   }
 
   assert {
     condition     = length(aws_lb_listener.https) == 1
-    error_message = "HTTPS listener should exist once certificate_arn is set."
+    error_message = "HTTPS listener should exist once enable_https is true."
   }
 
   assert {
     condition     = aws_lb_listener.https[0].port == 443
     error_message = "HTTPS listener should be on port 443."
+  }
+
+  assert {
+    condition     = aws_lb_listener.https[0].certificate_arn == "arn:aws:acm:us-east-1:123456789012:certificate/abc-123"
+    error_message = "The HTTPS listener must present the certificate it was handed."
+  }
+
+  assert {
+    condition     = startswith(aws_lb_listener.https[0].ssl_policy, "ELBSecurityPolicy-TLS13")
+    error_message = "The HTTPS listener must use a TLS1.3-capable policy."
+  }
+}
+
+run "https_marks_the_session_cookie_secure" {
+  command = plan
+
+  module {
+    source = "./modules/compute"
+  }
+
+  variables {
+    certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc-123"
+    enable_https    = true
+    cookie_secure   = true
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "COOKIE_SECURE=true")
+    error_message = "user_data must write COOKIE_SECURE=true once the HTTPS listener is live - a Secure cookie is the only thing stopping the session id from being sent over the plaintext port."
   }
 }
 

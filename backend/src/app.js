@@ -13,7 +13,10 @@ const app = express();
 
 // Required behind nginx + the ALB: without it, req.secure and req.ip are
 // derived from the direct (loopback) connection instead of X-Forwarded-*.
-app.set('trust proxy', 1);
+// Two hops to trust, not one: the ALB terminates first, then nginx proxies
+// to this process, so a value of 1 would stop at nginx's own address and
+// read the ALB's private IP as req.ip instead of the real client.
+app.set('trust proxy', 2);
 
 app.use(express.json());
 app.use(cookieParser());

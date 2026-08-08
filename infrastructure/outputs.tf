@@ -58,8 +58,23 @@ output "asg_name" {
 }
 
 output "app_url" {
-  description = "HTTP URL of the ALB (until the DNS/ACM module is live)."
-  value       = module.compute.app_url
+  description = "Public URL of the app - the domain over HTTPS once enable_https is true, the raw ALB DNS name over HTTP until then."
+  value       = local.https_enabled ? "https://${var.domain_name}" : module.compute.app_url
+}
+
+output "name_servers" {
+  description = "The 4 Route 53 nameservers to paste into the registrar's Custom DNS settings (Namecheap: Domain > Nameservers > Custom DNS). Null when enable_dns is false. Certificate validation and SES DKIM cannot complete until these are delegated."
+  value       = module.dns.name_servers
+}
+
+output "web_acl_arn" {
+  description = "ARN of the WAFv2 web ACL protecting the ALB. Null when enable_waf is false."
+  value       = module.dns.web_acl_arn
+}
+
+output "certificate_arn" {
+  description = "ARN of the validated ACM certificate. Null unless enable_dns and enable_https are both true."
+  value       = module.dns.certificate_arn
 }
 
 output "site_events_bus_name" {

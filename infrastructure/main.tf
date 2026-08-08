@@ -1,9 +1,26 @@
 # PulseMonitor root module.
 #
-# This init sprint establishes structure only — no resources are provisioned yet.
-# Module wiring below is COMMENTED and uncommented layer by layer in later sprints,
-# following the dependency order: network -> compute / storage -> monitoring -> dns.
-# See ./modules/* for the per-layer scaffolds and README.md for the roadmap.
+# Module wiring follows the dependency order: network -> compute / storage ->
+# monitoring -> dns. See ./modules/* for the per-layer implementations and
+# README.md for data contracts and CI details.
+#
+# https_enabled is the single derived truth for "is HTTPS actually live",
+# mirroring local.sender_identity in modules/monitoring/notifications.tf:
+# encode the invariant once here rather than validating it in two places.
+# module.dns.certificate_arn is already structurally null unless BOTH
+# enable_dns and enable_https are true (see modules/dns/outputs.tf), so this
+# local is redundant with that by construction - it exists so call sites here
+# (cookie_secure, app_url) don't have to reason about the dns module's
+# internals to arrive at the same answer.
+locals {
+  https_enabled = var.enable_dns && var.enable_https
+
+  # Never derived from module.monitoring.ses_dkim_tokens (a computed,
+  # unknown-length list at plan on the apply that first creates the SES
+  # identity) - only from these two static root variables, so module.dns can
+  # gate its DKIM record count on a value that's always known at plan.
+  ses_dkim_enabled = var.enable_notifications && var.notification_sender_identity_type == "domain"
+}
 
 module "network" {
   source             = "./modules/network"
@@ -61,7 +78,9 @@ module "compute" {
   asg_min_size         = var.asg_min_size
   asg_max_size         = var.asg_max_size
   asg_desired_capacity = var.asg_desired_capacity
-  certificate_arn      = var.certificate_arn
+  certificate_arn      = module.dns.certificate_arn
+  enable_https         = local.https_enabled
+  cookie_secure        = local.https_enabled
 
   users_table_name               = module.storage.users_table_name
   users_table_arn                = module.storage.users_table_arn
@@ -76,15 +95,38 @@ module "compute" {
   history_prefix                 = var.history_prefix
 }
 
-# module "dns" {
-#   source       = "./modules/dns"
-#   domain_name  = var.domain_name
-#   alb_dns_name = module.compute.alb_dns_name
-#   alb_zone_id  = module.compute.alb_zone_id
-#   alb_arn      = module.compute.alb_arn
-# }
+# No count on this module block, and no count/for_each expression anywhere
+# in it that reads from module.compute: every resource inside module.dns is
+# individually count-gated on enable_dns/enable_https/enable_waf instead (the
+# same house style as modules/monitoring/notifications.tf). A count on the
+# module block itself would create a single expansion vertex that every
+# resource inside it depends on - if that count expression ever read a
+# module.compute output, this dns <-> compute wiring would become a genuine
+# cycle instead of the two independent, acyclic chains it is today (dns reads
+# the ALB's outputs; compute reads dns's certificate_arn - neither chain's
+# ancestry references the other).
 #
-# Note: never add depends_on = [module.dns] to module "compute". The cert <->
-# ALB relationship is acyclic at the resource level (aws_lb doesn't depend on
-# its listener), but a module-level depends_on here would turn it into a hard
-# cycle once module "dns" is uncommented.
+# For the same reason: never add depends_on = [module.dns] to module
+# "compute", and never add depends_on = [module.compute] to module "dns"
+# either - a module-level depends_on inserts an edge from every resource in
+# one module to every resource in the other, which closes the loop that the
+# fine-grained resource references above deliberately avoid.
+module "dns" {
+  source = "./modules/dns"
+
+  project_name = var.project_name
+  environment  = var.environment
+  aws_region   = var.aws_region
+
+  domain_name  = var.domain_name
+  alb_dns_name = module.compute.alb_dns_name
+  alb_zone_id  = module.compute.alb_zone_id
+  alb_arn      = module.compute.alb_arn
+
+  enable_dns   = var.enable_dns
+  enable_https = var.enable_https
+  enable_waf   = var.enable_waf
+
+  enable_ses_dkim = local.ses_dkim_enabled
+  ses_dkim_tokens = module.monitoring.ses_dkim_tokens
+}

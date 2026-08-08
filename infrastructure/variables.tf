@@ -168,8 +168,28 @@ variable "asg_desired_capacity" {
   default     = 2
 }
 
-variable "certificate_arn" {
-  description = "ACM certificate ARN for the HTTPS listener. Null until the DNS module provisions one."
-  type        = string
-  default     = null
+variable "enable_dns" {
+  description = "Whether to create the Route 53 hosted zone, the DNS-validated ACM certificate, its validation records, and the apex/www alias records. Non-blocking - does NOT wait for certificate validation. See enable_https."
+  type        = bool
+  default     = false
+}
+
+# Separate from enable_dns because aws_acm_certificate_validation BLOCKS
+# until the validation CNAME resolves publicly, and the domain
+# (pulsemonitor.online) is registered at an external registrar (Namecheap) -
+# delegating its nameservers to the zone module.dns creates is a manual,
+# out-of-band step that Terraform cannot perform or wait for. Flipping this
+# on before that delegation is live doesn't fail fast: it hangs the apply for
+# the certificate validation's timeout while holding the deploy pipeline's
+# serialized concurrency group. See modules/dns/main.tf's file header.
+variable "enable_https" {
+  description = "Whether to validate the ACM certificate and switch the ALB to HTTPS (redirect + HTTPS listener + Secure session cookies). Requires enable_dns and requires the domain's nameservers to already be delegated to the Route 53 zone."
+  type        = bool
+  default     = false
+}
+
+variable "enable_waf" {
+  description = "Whether to create a WAFv2 web ACL (managed rule groups + a per-IP rate limit) and associate it with the ALB."
+  type        = bool
+  default     = false
 }
