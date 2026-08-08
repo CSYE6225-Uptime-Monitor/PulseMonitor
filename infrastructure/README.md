@@ -282,6 +282,8 @@ test (backend, frontend, pinger, notifier)
        │    rebuild when backend/, frontend/, packer/ or scripts/ changed
        │    skip when only infrastructure/ or lambda/ changed
        ├─ (if rebuilding) ./scripts/package-artifacts.sh + packer build
+       ├─ npm ci --omit=dev in lambda/pinger and lambda/notifier (always -
+       │    data.archive_file zips these on every apply, rebuild or not)
        └─ terraform init / plan / apply -var-file=environments/dev.tfvars
 ```
 

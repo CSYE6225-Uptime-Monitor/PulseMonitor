@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { api, clearCsrfToken, type User } from "./api";
+import { api, clearCsrfToken, onUnauthorized, type User } from "./api";
 
 interface SignupInput {
   email: string;
@@ -22,6 +22,7 @@ interface AuthContextValue {
   signup: (input: SignupInput) => Promise<void>;
   login: (input: LoginInput) => Promise<void>;
   logout: () => Promise<void>;
+  updateUser: (user: User) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -56,6 +57,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    // The mount-time check above only catches a session that was already
+    // expired on page load. Without this, a session expiring mid-use (the
+    // cookie is 24h) leaves `user` populated forever - useRequireAuth never
+    // redirects, and polling hooks like useSites just repeat "Authentication
+    // required." every interval.
+    onUnauthorized(() => {
+      clearCsrfToken();
+      setUser(null);
+    });
+
+    return () => onUnauthorized(null);
+  }, []);
+
   const login = useCallback(async (input: LoginInput) => {
     const self = await api.post<User>("/v1/login", input);
     setUser(self);
@@ -70,12 +85,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    await api.post("/v1/logout");
-    clearCsrfToken();
-    setUser(null);
+    try {
+      await api.post("/v1/logout");
+    } finally {
+      // Always clear local session state, even if the request itself failed
+      // (e.g. the session already expired server-side and /v1/logout 401s) -
+      // otherwise the button silently does nothing and the user stays "logged in".
+      clearCsrfToken();
+      setUser(null);
+    }
   }, []);
 
-  return <AuthContext.Provider value={{ user, loading, signup, login, logout }}>{children}</AuthContext.Provider>;
+  // Lets a page that already has the server's response (e.g. a profile
+  // update) push it into the shared context directly, instead of every
+  // consumer - like the dashboard greeting - staying stuck on whatever was
+  // fetched at mount until the next full page reload.
+  const updateUser = useCallback((updated: User) => {
+    setUser(updated);
+  }, []);
+
+  return (
+    <AuthContext.Provider value={{ user, loading, signup, login, logout, updateUser }}>{children}</AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextValue {

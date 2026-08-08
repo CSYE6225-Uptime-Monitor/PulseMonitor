@@ -179,6 +179,21 @@ jobs:
           packer init backend-ami.pkr.hcl
           packer build -var="subnet_id=${SUBNET_ID}" backend-ami.pkr.hcl
 
+      # Unconditional (unlike the AMI-gated steps above): data.archive_file.pinger
+      # and data.archive_file.notifier zip these directories as-is on every
+      # apply, regardless of whether the AMI needed rebuilding. Gating this on
+      # ami_needed.outputs.rebuild left the Lambda zips built from whatever
+      # happened to be on the runner's checkout - empty for notifier, since its
+      # node_modules isn't (and per .gitignore, shouldn't be) committed. Mirrors
+      # terraform.yml's "Install {pinger,notifier} production dependencies".
+      - name: Install pinger production dependencies
+        working-directory: lambda/pinger
+        run: npm ci --omit=dev
+
+      - name: Install notifier production dependencies
+        working-directory: lambda/notifier
+        run: npm ci --omit=dev
+
       # data.aws_ami.app selects the newest AMI tagged
       # Application=pulsemonitor-backend, so a fresh build is picked up here
       # with no variable to thread through.

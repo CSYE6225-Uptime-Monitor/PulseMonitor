@@ -75,4 +75,12 @@ describe("SiteList", () => {
     expect(screen.getByText("Unknown")).toBeInTheDocument();
     expect(screen.getByText(/never checked/i)).toBeInTheDocument();
   });
+
+  it("keeps showing the last known table alongside the error when a later poll fails", () => {
+    render(<SiteList sites={[upSite]} loading={false} error="Failed to load sites." />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Failed to load sites.");
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Example" })).toBeInTheDocument();
+  });
 });
