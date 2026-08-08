@@ -46,6 +46,6 @@ notification_verified_recipients  = [] # must stay empty in "email" mode -
 # enable_https additionally blocks on certificate validation and requires
 # delegation to already be live - see modules/dns/main.tf's file header and
 # infrastructure/README.md's "HTTPS rollout" section before flipping either.
-enable_dns   = false
-enable_https = false
-enable_waf   = false
+enable_dns   = true
+enable_https = true
+enable_waf   = true
