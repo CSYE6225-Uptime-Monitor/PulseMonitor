@@ -77,3 +77,65 @@ resource "aws_dynamodb_table" "locks" {
     type = "S"
   }
 }
+
+# --- GitHub Actions CD -------------------------------------------------------
+#
+# Lives in bootstrap rather than the root module on purpose: this is the role
+# the root module's own `terraform apply` runs as, so it cannot be created by
+# that apply. Bootstrap is the one-time, manually-applied layer - same
+# reasoning as the state bucket it sits next to.
+#
+# No thumbprint_list: it is Optional+Computed in AWS provider v5, and AWS
+# validates token.actions.githubusercontent.com against its own trust store
+# rather than a pinned certificate fingerprint - so there is nothing to
+# rotate here when GitHub's cert changes.
+resource "aws_iam_openid_connect_provider" "github" {
+  count = var.enable_github_oidc ? 1 : 0
+
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = []
+
+  tags = { Name = "${var.project_name}-github-oidc" }
+}
+
+resource "aws_iam_role" "github_deploy" {
+  count = var.enable_github_oidc ? 1 : 0
+
+  name        = "${var.project_name}-github-deploy"
+  description = "Assumed via OIDC by .github/workflows/deploy.yml to build the AMI and apply Terraform."
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "GitHubActionsOIDC"
+      Effect = "Allow"
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.github[0].arn
+      }
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        # aud pins the audience so a token minted for another cloud can't be
+        # replayed here; sub pins which repo AND which ref may assume it.
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        }
+        StringLike = {
+          "token.actions.githubusercontent.com:sub" = [
+            for subject in var.github_allowed_subjects :
+            "repo:${var.github_repository}:${subject}"
+          ]
+        }
+      }
+    }]
+  })
+
+  tags = { Name = "${var.project_name}-github-deploy" }
+}
+
+resource "aws_iam_role_policy_attachment" "github_deploy" {
+  count = var.enable_github_oidc ? 1 : 0
+
+  role       = aws_iam_role.github_deploy[0].name
+  policy_arn = var.github_deploy_policy_arn
+}

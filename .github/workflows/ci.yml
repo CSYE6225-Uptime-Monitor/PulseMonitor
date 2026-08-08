@@ -1,0 +1,55 @@
+name: ci
+
+# Tests the application code. Infrastructure and Lambda validation lives in
+# terraform.yml, which has its own paths filter - between the two, every
+# directory in the repo is covered by CI.
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", "frontend/**", ".github/workflows/ci.yml"]
+  pull_request:
+    paths: ["backend/**", "frontend/**", ".github/workflows/ci.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Full install, not --omit=dev: jest is a devDependency. The
+      # production-only install happens in scripts/package-artifacts.sh at
+      # AMI build time, not here.
+      - run: npm ci
+      - run: npm test
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+      # Catches a broken production build (type errors, bad imports) before
+      # it reaches the AMI, where it would surface as a failed packer run
+      # halfway through a deploy.
+      - run: npm run build

@@ -18,3 +18,8 @@ output "lock_table_arn" {
   description = "ARN of the DynamoDB table used for state locking."
   value       = aws_dynamodb_table.locks.arn
 }
+
+output "github_deploy_role_arn" {
+  description = "Set this as the AWS_DEPLOY_ROLE_ARN GitHub repository variable so .github/workflows/deploy.yml can assume it. Null when enable_github_oidc is false."
+  value       = one(aws_iam_role.github_deploy[*].arn)
+}

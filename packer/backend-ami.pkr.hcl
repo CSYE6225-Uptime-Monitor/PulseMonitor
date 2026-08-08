@@ -80,17 +80,12 @@ build {
   # sidesteps it entirely - tar preserves the relative symlinks under
   # node_modules/.bin/ the same way the old recursive copy did.
   #
-  # The tarballs are built OUTSIDE Packer (see build/README or the infra
-  # README's deploy steps) rather than via a shell-local provisioner here:
-  # the file provisioner validates that its source exists at config-parse
-  # time, before any provisioner has run, so a shell-local step earlier in
-  # this same build block cannot produce a file in time for it.
-  #   tar -czf build/pulsemonitor-backend.tar.gz -C ../backend .
-  #   mkdir -p build/frontend-stage/.next
-  #   cp -r ../frontend/.next/standalone/. build/frontend-stage/
-  #   cp -r ../frontend/.next/static build/frontend-stage/.next/static
-  #   cp -r ../frontend/public build/frontend-stage/public
-  #   tar -czf build/pulsemonitor-frontend.tar.gz -C build/frontend-stage .
+  # The tarballs are built OUTSIDE Packer, by ./scripts/package-artifacts.sh,
+  # rather than via a shell-local provisioner here: the file provisioner
+  # validates that its source exists at config-parse time, before any
+  # provisioner has run, so a shell-local step earlier in this same build
+  # block cannot produce a file in time for it. CI and humans both run that
+  # one script, so the AMI contents can't drift between them.
   provisioner "file" {
     source      = "build/pulsemonitor-backend.tar.gz"
     destination = "/tmp/pulsemonitor-backend.tar.gz"

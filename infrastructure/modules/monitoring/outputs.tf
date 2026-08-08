@@ -47,7 +47,12 @@ output "notification_sender_identity" {
   value       = var.enable_notifications ? local.sender_identity : null
 }
 
+# Only .tokens, not the whole dkim_signing_attributes object: that object
+# also carries domain_signing_private_key, which is a sensitive attribute -
+# exporting the parent makes Terraform refuse the output entirely ("Output
+# refers to sensitive values") the moment the identity exists in state. The
+# tokens are the public half and the only part you actually publish as DNS.
 output "ses_dkim_tokens" {
-  description = "The 3 DKIM CNAME record names/values to publish at the domain registrar. Null unless notification_sender_identity_type is \"domain\" - an email-address identity is verified by click-through, not DNS."
-  value       = var.notification_sender_identity_type == "domain" ? one(aws_sesv2_email_identity.sender[*].dkim_signing_attributes) : null
+  description = "The 3 DKIM CNAME token values to publish at the domain registrar (as <token>._domainkey.<domain> CNAME <token>.dkim.amazonses.com). Null unless notification_sender_identity_type is \"domain\" - an email-address identity is verified by click-through, not DNS."
+  value       = var.notification_sender_identity_type == "domain" ? try(aws_sesv2_email_identity.sender[0].dkim_signing_attributes[0].tokens, null) : null
 }
