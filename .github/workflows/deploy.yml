@@ -204,13 +204,21 @@ jobs:
       # exists, independent of Route 53 and of the registrar's nameserver
       # delegation. A non-200 here means the deploy itself is broken, not
       # that DNS is mid-rollout, so this should fail the job.
+      #
+      # Hits 443 directly rather than 80: once enable_https is true the port-80
+      # listener is a 301 to HTTPS, so plain HTTP can never return 200. -k is
+      # required and deliberate - the certificate is issued for the public
+      # domain, not for the ALB's own *.elb.amazonaws.com name, so verifying it
+      # against this hostname always fails. Certificate validity is the job of
+      # the public-domain step below; this step only asks "is the app serving?"
+      # and must stay independent of nameserver delegation.
       - name: Smoke test the ALB
         working-directory: infrastructure
         run: |
           set -euo pipefail
           ALB="$(terraform output -raw alb_dns_name)"
           for i in $(seq 1 30); do
-            CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "http://${ALB}/healthz" || echo 000)"
+            CODE="$(curl -skS -o /dev/null -w '%{http_code}' --max-time 10 "https://${ALB}/healthz" || echo 000)"
             echo "attempt ${i}: ${CODE}"
             [ "$CODE" = "200" ] && exit 0
             sleep 10
