@@ -5,6 +5,10 @@ backend/node_modules/
 backend/coverage/
 frontend/.env
 frontend/node_modules/
+lambda/pinger/node_modules/
+lambda/pinger/coverage/
+lambda/notifier/node_modules/
+lambda/notifier/coverage/
 .DS_Store
 frontend/.next/
 frontend/test-results/
