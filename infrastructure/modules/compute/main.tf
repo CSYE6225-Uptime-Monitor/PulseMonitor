@@ -144,10 +144,11 @@ resource "aws_iam_role_policy" "s3" {
         Resource = ["${var.monitoring_history_bucket_arn}/*"]
       },
       {
-        # Append-only audit trail: no Get, no Delete.
-        Sid      = "AuditLogsAppendOnly"
+        # No Delete: objects are immutable once written; Get is required by
+        # GET /v1/user/self/activity.
+        Sid      = "AuditLogsWriteAndRead"
         Effect   = "Allow"
-        Action   = ["s3:PutObject"]
+        Action   = ["s3:PutObject", "s3:GetObject"]
         Resource = ["${var.audit_logs_bucket_arn}/*"]
       },
     ]
@@ -324,7 +325,11 @@ resource "aws_launch_template" "app" {
   block_device_mappings {
     device_name = "/dev/xvda"
     ebs {
-      volume_size           = 20
+      # Must be >= the source AMI's snapshot size or CreateAutoScalingGroup
+      # rejects the launch template outright (EBS never shrinks a volume
+      # below the snapshot it's restored from). The al2023-ami-*-x86_64
+      # Packer resolves to currently snapshots at 30GB.
+      volume_size           = 30
       volume_type           = "gp3"
       encrypted             = true
       delete_on_termination = true
@@ -351,6 +356,10 @@ resource "aws_launch_template" "app" {
     sites_table          = var.sites_table_name
     history_bucket       = var.monitoring_history_bucket_name
     history_prefix       = var.history_prefix
+    user_data_bucket     = var.user_data_bucket_name
+    export_prefix        = var.export_prefix
+    audit_bucket         = var.audit_logs_bucket_name
+    audit_prefix         = var.audit_prefix
     app_port             = var.app_port
     node_env             = var.node_env
     cookie_secure        = var.cookie_secure

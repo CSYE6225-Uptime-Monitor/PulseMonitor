@@ -17,6 +17,12 @@ tfplan
 *.tfvars.json
 !*.tfvars.example
 
+# environments/ holds the committed, canonical config for each deployed
+# environment — CI applies these, so they must be version-controlled. They
+# deliberately contain no secrets. See environments/dev.tfvars.
+!environments/
+!environments/*.tfvars
+
 # Backend partial-config with real values — keep the example.
 backend.hcl
 !backend.hcl.example

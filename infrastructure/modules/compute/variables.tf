@@ -146,6 +146,11 @@ variable "audit_logs_bucket_arn" {
   type        = string
 }
 
+variable "audit_logs_bucket_name" {
+  description = "Name of the audit-logs S3 bucket."
+  type        = string
+}
+
 variable "monitoring_history_bucket_name" {
   description = "Name of the monitoring-history S3 bucket."
   type        = string
@@ -160,6 +165,18 @@ variable "history_prefix" {
   description = "S3 key prefix history records are read from. Must match module.monitoring's history_prefix (the pinger's write prefix) - fed from the same root variable so the two can't drift."
   type        = string
   default     = "sites"
+}
+
+variable "audit_prefix" {
+  description = "S3 key prefix audit events are written to and read from. Unlike history_prefix, the app is the only writer and reader, so this is compute-local rather than a root variable."
+  type        = string
+  default     = "audit"
+}
+
+variable "export_prefix" {
+  description = "S3 key prefix data exports are written to and read from. Compute-local for the same reason as audit_prefix."
+  type        = string
+  default     = "exports"
 }
 
 variable "log_retention_days" {

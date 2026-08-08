@@ -58,6 +58,7 @@ variables {
   user_data_bucket_name          = "pulsemonitor-dev-user-data-123456789012"
   user_data_bucket_arn           = "arn:aws:s3:::pulsemonitor-dev-user-data-123456789012"
   audit_logs_bucket_arn          = "arn:aws:s3:::pulsemonitor-dev-audit-logs-123456789012"
+  audit_logs_bucket_name         = "pulsemonitor-dev-audit-logs-123456789012"
   monitoring_history_bucket_name = "pulsemonitor-dev-monitoring-history-123456789012"
   monitoring_history_bucket_arn  = "arn:aws:s3:::pulsemonitor-dev-monitoring-history-123456789012"
 }
@@ -77,6 +78,26 @@ run "user_data_wires_the_history_bucket" {
   assert {
     condition     = strcontains(base64decode(aws_launch_template.app.user_data), "HISTORY_PREFIX=sites")
     error_message = "user_data must write HISTORY_PREFIX so the backend's S3 key prefix matches the pinger's."
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "USER_DATA_BUCKET=pulsemonitor-dev-user-data-123456789012")
+    error_message = "user_data must write USER_DATA_BUCKET so the backend can create and read data exports."
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "AUDIT_BUCKET=pulsemonitor-dev-audit-logs-123456789012")
+    error_message = "user_data must write AUDIT_BUCKET so the backend can write and read audit events."
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "EXPORT_PREFIX=exports")
+    error_message = "user_data must write EXPORT_PREFIX with its default value."
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "AUDIT_PREFIX=audit")
+    error_message = "user_data must write AUDIT_PREFIX with its default value."
   }
 }
 
@@ -370,11 +391,19 @@ run "iam_is_least_privilege" {
   }
 
   assert {
+    condition = length([
+      for s in jsondecode(aws_iam_role_policy.s3.policy).Statement :
+      s if contains(s.Action, "s3:DeleteObject") && contains(s.Resource, "${var.audit_logs_bucket_arn}/*")
+    ]) == 0
+    error_message = "Audit-log objects must be immutable - no s3:DeleteObject."
+  }
+
+  assert {
     condition = anytrue([
       for s in jsondecode(aws_iam_role_policy.s3.policy).Statement :
-      s.Sid == "AuditLogsAppendOnly" && s.Action == ["s3:PutObject"]
+      contains(s.Resource, "${var.audit_logs_bucket_arn}/*") && contains(s.Action, "s3:GetObject")
     ])
-    error_message = "Audit-logs bucket access must be append-only (PutObject only)."
+    error_message = "Instance role must allow s3:GetObject on the audit-logs bucket - GET /v1/user/self/activity depends on it."
   }
 }
 

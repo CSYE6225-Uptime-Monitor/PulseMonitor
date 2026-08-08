@@ -13,6 +13,7 @@ Terraform for the PulseMonitor AWS deployment (region `us-east-1`, domain
 | `compute` | Implemented — ALB, target group, HTTP/HTTPS-ready listeners, launch template (Packer AMI), ASG with instance refresh, EC2 instance role |
 | `dns` | Deferred to Sprint 4-5 — Route 53, ACM, WAF. The app runs on the ALB DNS name until then. |
 | Alerts (SNS + CloudWatch alarms) | Deferred to Sprint 4 — lands as an additive `modules/monitoring/alerts.tf`, gated by `enable_alerts`. |
+| Notifications (per-owner down/recovery email) | Implemented, off by default — custom EventBridge bus, notifier Lambda (`lambda/notifier/`), SES domain identity. Gated by `enable_notifications`; see [Site notifications](#site-notifications) below. |
 
 ## Layout
 
@@ -27,6 +28,7 @@ infrastructure/
 └── tests/                     # terraform test + structure check
 
 lambda/pinger/                 # pinger Lambda source, zipped by data.archive_file
+lambda/notifier/                # notifier Lambda source, zipped by data.archive_file
 packer/                        # Packer template that bakes the backend app + nginx into an AMI
 ```
 
@@ -67,6 +69,37 @@ Fixed-width `epoch_ms` means lexicographic order == chronological order
 within a day partition, so `ListObjectsV2` + `StartAfter` is a free
 pagination cursor for the history API. Body is JSON with `schema_version: 1`.
 Bounded by the 90-day lifecycle rule on the `sites/` prefix.
+
+### `users` table `user_id-index` GSI (hash key `user_id`, `KEYS_ONLY`)
+
+Lets the notifier resolve a site's owner email from `user_id` without a
+`Scan` and without base-table access - `KEYS_ONLY` projects the GSI's own key
+plus the base table's key (`email`), so the index contains exactly
+`{user_id, email}` and nothing else (not `password_hash`). Sparse: an
+account created before `user_id` existed simply has no entry until its next
+login (see `verifyCredentials` in `backend/src/services/userService.js`).
+
+### `SiteStatusChanged` EventBridge event (custom bus `pulsemonitor-{env}-site-events`)
+
+Published by the pinger only on a status *transition* (never on every failed
+check) - see `lambda/pinger/lib/events.js`. `Source: "pulsemonitor.pinger"`,
+`DetailType: "SiteStatusChanged"`. `detail`:
+
+| field | type | notes |
+|---|---|---|
+| `site_id`, `user_id`, `url`, `name` | S | copied from the scanned site |
+| `status` | S | `"up"` \| `"down"` - the new status |
+| `previous_status` | S \| null | `null` (not omitted) on a site's first check |
+| `previous_status_change_at` | S \| null | used by the notifier to compute downtime on recovery |
+| `status_code`, `latency_ms`, `error_type`, `error_message` | - | the ping result, same shapes as the `sites` table |
+| `checked_at` | S | ISO-8601 UTC with ms |
+
+Two rules consume this: `site-down` matches `status: ["down"]` (deliberately
+not constraining `previous_status`, so a newly added site that's already
+down still alerts), and `site-recovered` matches `status: ["up"]` **and**
+`previous_status: ["down"]` (so a brand-new site's first successful check —
+where `previous_status` is JSON `null` — never triggers a false "recovered"
+email).
 
 ## Port chain (compute)
 
@@ -134,7 +167,7 @@ Bootstrap has been applied. Deployed resources:
 | Resource | Name | ARN |
 |---|---|---|
 | S3 bucket | `pulsemonitor-tfstate` | `arn:aws:s3:::pulsemonitor-tfstate` |
-| DynamoDB table | `pulsemonitor-tf-locks` | `arn:aws:dynamodb:us-east-1:713545429375:table/pulsemonitor-tf-locks` |
+| DynamoDB table | `pulsemonitor-tf-locks` | `arn:aws:dynamodb:us-east-1:611467706761:table/pulsemonitor-tf-locks` |
 
 Region: `us-east-1`. Versioning and AES256 encryption confirmed on the
 bucket; public access fully blocked.
@@ -150,8 +183,113 @@ cp backend.hcl.example backend.hcl      # fill in bootstrap outputs
 terraform init -backend-config=backend.hcl
 ```
 
+## Site notifications
+
+Set `enable_notifications = true` plus `notification_sender_domain` and
+`notification_sender_email` (see `terraform.tfvars.example`) to turn on
+per-owner down/recovery emails. Everything is additive and gated by
+`enable_notifications` - disabled is the default, and the whole pipeline
+(custom bus, both rules, notifier Lambda, DLQ, SES identities) doesn't exist
+in the plan when it's off.
+
+**`terraform apply` succeeds while SES verification is still pending** - this
+is the trap to know about. Domain identities can't be verified by Terraform
+(there's no waiter for it); a human has to publish DNS records first:
+
+1. `terraform apply`, then read the `ses_dkim_tokens` output - 3 CNAME
+   records (name -> value).
+2. Publish all 3 at the domain registrar for `notification_sender_domain`.
+3. Poll until verified (DNS propagation, not instant):
+   ```bash
+   aws sesv2 get-email-identity --email-identity <notification_sender_domain>
+   # wait for VerifiedForSendingStatus: true
+   ```
+4. Until then, and until AWS grants **SES production access** (a support
+   request - see `aws sesv2 get-account`), the account is in the sandbox:
+   only verified recipient identities can receive mail. Verify test
+   addresses via `notification_verified_recipients` (each needs a
+   manual click-through on the email AWS sends), or set
+   `notification_override_recipient` to redirect every notification to one
+   verified mailbox for end-to-end testing (forbidden when
+   `environment = "prod"` - see the variable's validation in
+   `modules/monitoring/variables.tf`).
+
+A failed send is either swallowed (permanent: unverified recipient,
+suspended account - logged + an EMF `NotificationFailed` metric, see
+`lambda/notifier/lib/email.js::isPermanentRejection`) or retried by Lambda
+and, if still failing, lands in the `notifier-dlq` SQS queue
+(`notifier_dlq_url` output).
+
 ## CI
 
-`.github/workflows/terraform.yml` runs fmt-check, the structure check, and
-`validate` + `test` for both the root and bootstrap on every PR. No plan/apply,
-no cloud credentials.
+Three workflows, split by paths filter so every directory is covered:
+
+| Workflow | Triggers on | Does |
+|---|---|---|
+| `terraform.yml` | `infrastructure/**`, `lambda/**` | fmt-check, structure check, `validate` + `test` for root and bootstrap, plus pinger/notifier jest. No credentials. |
+| `ci.yml` | `backend/**`, `frontend/**` | backend jest, frontend lint + vitest + production build. No credentials. |
+| `deploy.yml` | push to `main` (any deployable path), or manual dispatch | Re-runs all four test suites, rebuilds the AMI **only if application code changed**, then `terraform apply`. |
+
+## Continuous deployment
+
+`deploy.yml` deploys to the dev environment on merge to `main`:
+
+```
+test (backend, frontend, pinger, notifier)
+  └─ deploy
+       ├─ assume AWS role via OIDC (no stored keys)
+       ├─ decide whether the AMI needs rebuilding
+       │    rebuild when backend/, frontend/, packer/ or scripts/ changed
+       │    skip when only infrastructure/ or lambda/ changed
+       ├─ (if rebuilding) ./scripts/package-artifacts.sh + packer build
+       └─ terraform init / plan / apply -var-file=environments/dev.tfvars
+```
+
+Rolling out a new AMI is handled by AWS, not the workflow: `data.aws_ami.app`
+picks the newest image tagged `Application=pulsemonitor-backend`, which changes
+the launch template, which triggers the ASG's `instance_refresh` (Rolling,
+`min_healthy_percentage = 50`, `auto_rollback = true`) — one instance at a
+time, rolled back automatically if the new one fails its health check.
+
+A `concurrency` group serialises deploys: two applies against one state file
+would contend for the lock and could leave a half-rolled ASG. In-flight
+deploys are never cancelled.
+
+### One-time setup
+
+1. Apply the bootstrap to create the GitHub OIDC provider and deploy role:
+   ```bash
+   cd infrastructure/bootstrap
+   terraform init && terraform apply
+   terraform output github_deploy_role_arn
+   ```
+2. In GitHub → *Settings → Secrets and variables → Actions → Variables*, add a
+   repository **variable** `AWS_DEPLOY_ROLE_ARN` set to that ARN. The workflow
+   fails fast with an explanatory error if it is missing, rather than
+   half-deploying.
+
+Only that one variable is needed — there are no AWS access keys anywhere. The
+role's trust policy is the real security boundary: it accepts only tokens whose
+`aud` is `sts.amazonaws.com` and whose `sub` is
+`repo:CSYE6225-Uptime-Monitor/PulseMonitor:ref:refs/heads/main`, so no other
+repo, branch, or fork PR can assume it. It carries `AdministratorAccess` by
+design (see the comment on `github_deploy_policy_arn`) because `terraform
+apply` creates IAM roles and `packer build` creates EC2 instances and AMIs;
+tighten it if the account is ever shared.
+
+### Environment configuration
+
+`environments/dev.tfvars` is **committed** and is the single source of truth for
+what is deployed — CI and humans both pass it explicitly:
+
+```bash
+terraform apply -var-file=environments/dev.tfvars
+```
+
+It is deliberately not named `terraform.tfvars`, for two reasons. A gitignored
+`terraform.tfvars` would leave CI applying variable *defaults* — and
+`enable_notifications` defaults to `false`, so the first automated deploy would
+destroy the whole notification stack. It is also auto-loaded by `terraform
+test`, which leaks its values into module-level test runs. Nothing secret lives
+in it: the session secret is generated by `random_password` into SSM, and AWS
+credentials come from OIDC.

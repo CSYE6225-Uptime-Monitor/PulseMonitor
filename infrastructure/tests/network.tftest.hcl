@@ -59,6 +59,15 @@ mock_provider "aws" {
 run "subnet_cidrs_are_correct" {
   command = apply
 
+  # Pinned rather than left to the default: this run exercises the full
+  # root config (no module {} override), so it's exposed to whatever a
+  # developer's local terraform.tfvars sets for identically-named root
+  # variables - and this test isn't mocking the SQS/SES resources that
+  # enable_notifications=true would pull in.
+  variables {
+    enable_notifications = false
+  }
+
   assert {
     condition     = module.network.public_subnet_ids != null
     error_message = "Network module should output public subnet IDs."
@@ -77,6 +86,15 @@ run "subnet_cidrs_are_correct" {
 
 run "security_groups_are_created" {
   command = apply
+
+  # Pinned rather than left to the default: this run exercises the full
+  # root config (no module {} override), so it's exposed to whatever a
+  # developer's local terraform.tfvars sets for identically-named root
+  # variables - and this test isn't mocking the SQS/SES resources that
+  # enable_notifications=true would pull in.
+  variables {
+    enable_notifications = false
+  }
 
   assert {
     condition     = module.network.alb_sg_id != null

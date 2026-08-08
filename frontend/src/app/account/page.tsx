@@ -3,7 +3,10 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useRequireAuth } from "@/lib/auth";
-import { api, ApiError, type User } from "@/lib/api";
+import { ApiError, type User } from "@/lib/api";
+import { updateSelf } from "@/lib/account";
+import { useExports } from "@/lib/useExports";
+import { ExportList } from "@/components/ExportList";
 
 export default function AccountPage() {
   const { user, loading } = useRequireAuth();
@@ -13,7 +16,12 @@ export default function AccountPage() {
     return <p className="p-8 text-zinc-600 dark:text-zinc-400">Loading...</p>;
   }
 
-  return <AccountForm key={user.email} user={user} onLogout={logout} />;
+  return (
+    <div className="mx-auto w-full max-w-2xl space-y-10 p-8">
+      <AccountForm key={user.email} user={user} onLogout={logout} />
+      <DataExportSection />
+    </div>
+  );
 }
 
 function AccountForm({ user, onLogout }: { user: User; onLogout: () => Promise<void> }) {
@@ -29,7 +37,7 @@ function AccountForm({ user, onLogout }: { user: User; onLogout: () => Promise<v
     setMessage(null);
     setSubmitting(true);
     try {
-      await api.put<User>("/v1/user/self", form);
+      await updateSelf(form);
       setMessage("Account updated.");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
@@ -44,7 +52,7 @@ function AccountForm({ user, onLogout }: { user: User; onLogout: () => Promise<v
   }
 
   return (
-    <div className="mx-auto w-full max-w-sm space-y-6 p-8">
+    <div className="w-full max-w-sm space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">My account</h1>
         <button
@@ -56,9 +64,14 @@ function AccountForm({ user, onLogout }: { user: User; onLogout: () => Promise<v
         </button>
       </div>
 
-      <a href="/dashboard" className="block text-sm font-medium text-zinc-950 underline dark:text-zinc-50">
-        Back to dashboard
-      </a>
+      <div className="flex flex-col gap-1">
+        <a href="/dashboard" className="text-sm font-medium text-zinc-950 underline dark:text-zinc-50">
+          Back to dashboard
+        </a>
+        <a href="/account/activity" className="text-sm font-medium text-zinc-950 underline dark:text-zinc-50">
+          Account activity
+        </a>
+      </div>
 
       <p className="text-sm text-zinc-600 dark:text-zinc-400">{user.email}</p>
 
@@ -111,6 +124,45 @@ function AccountForm({ user, onLogout }: { user: User; onLogout: () => Promise<v
           {submitting ? "Saving..." : "Save changes"}
         </button>
       </form>
+    </div>
+  );
+}
+
+function DataExportSection() {
+  const { exports, loading, error, requestExport, requesting, download, downloadingId, actionError } = useExports();
+
+  return (
+    <div className="w-full max-w-sm space-y-4 border-t border-zinc-200 pt-8 dark:border-zinc-800">
+      <h2 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">Export your data</h2>
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        Download a copy of your profile, sites, and recent history.
+      </p>
+
+      {actionError && (
+        <p
+          role="alert"
+          className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300"
+        >
+          {actionError}
+        </p>
+      )}
+
+      <button
+        type="button"
+        onClick={() => void requestExport()}
+        disabled={requesting}
+        className="w-full rounded-md bg-zinc-950 px-4 py-2 font-medium text-white disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-950"
+      >
+        {requesting ? "Requesting..." : "Request export"}
+      </button>
+
+      <ExportList
+        exports={exports}
+        loading={loading}
+        error={error}
+        onDownload={(exportId) => void download(exportId)}
+        downloadingId={downloadingId}
+      />
     </div>
   );
 }

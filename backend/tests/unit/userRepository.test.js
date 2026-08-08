@@ -64,5 +64,35 @@ describe('userRepository', () => {
       const call = ddbMock.commandCalls(UpdateCommand)[0];
       expect(call.args[0].input.UpdateExpression).toContain('#first_name = :first_name');
     });
+
+    it('omits ConditionExpression when none is given', async () => {
+      ddbMock.on(UpdateCommand).resolves({ Attributes: {} });
+      await userRepository.update('jane@example.com', { first_name: 'Janet' });
+      const call = ddbMock.commandCalls(UpdateCommand)[0];
+      expect(call.args[0].input.ConditionExpression).toBeUndefined();
+    });
+
+    it('applies a ConditionExpression when given, so callers can guard against concurrent writes', async () => {
+      ddbMock.on(UpdateCommand).resolves({ Attributes: { email: 'jane@example.com', user_id: 'u1' } });
+
+      await userRepository.update(
+        'jane@example.com',
+        { user_id: 'u1' },
+        { conditionExpression: 'attribute_not_exists(user_id)' }
+      );
+
+      const call = ddbMock.commandCalls(UpdateCommand)[0];
+      expect(call.args[0].input.ConditionExpression).toBe('attribute_not_exists(user_id)');
+    });
+
+    it('propagates ConditionalCheckFailedException to the caller', async () => {
+      const conditionalError = new Error('conditional check failed');
+      conditionalError.name = 'ConditionalCheckFailedException';
+      ddbMock.on(UpdateCommand).rejects(conditionalError);
+
+      await expect(
+        userRepository.update('jane@example.com', { user_id: 'u1' }, { conditionExpression: 'attribute_not_exists(user_id)' })
+      ).rejects.toThrow('conditional check failed');
+    });
   });
 });

@@ -4,7 +4,7 @@ const { ScanCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
 // ExpressionAttributeNames whenever they're referenced. checked_at is not
 // reserved and needs no alias.
 const PROJECTION =
-  '#url, #name, #status, user_id, site_id, enabled, check_frequency_minutes, consecutive_failures, checked_at';
+  '#url, #name, #status, user_id, site_id, enabled, check_frequency_minutes, consecutive_failures, checked_at, last_status_change_at';
 const SCAN_EXPRESSION_NAMES = { '#url': 'url', '#name': 'name', '#status': 'status' };
 
 const DEFAULT_FREQUENCY_MINUTES = 5;
@@ -102,6 +102,12 @@ async function writeSiteStatus(docClient, tableName, { userId, siteId, previousS
       ExpressionAttributeValues: values,
     }),
   );
+
+  return {
+    statusChanged,
+    previousStatus: previousStatus ?? null,
+    status: result.status,
+  };
 }
 
 module.exports = { scanDueSites, writeSiteStatus, isSiteDue };

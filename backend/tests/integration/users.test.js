@@ -1,12 +1,17 @@
 const request = require('supertest');
 const { mockClient } = require('aws-sdk-client-mock');
 const { GetCommand, PutCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
+const { PutObjectCommand } = require('@aws-sdk/client-s3');
 const bcrypt = require('bcryptjs');
 
 const { docClient } = require('../../src/db/dynamo');
+const { s3Client } = require('../../src/db/s3');
 const app = require('../../src/app');
 
 const ddbMock = mockClient(docClient);
+// User create/update and the login inside these tests now write audit
+// events - without this, PutObjectCommand would hit real AWS.
+const s3Mock = mockClient(s3Client);
 
 async function getCsrfToken(agent) {
   const res = await agent.get('/v1/csrf-token');
@@ -16,6 +21,8 @@ async function getCsrfToken(agent) {
 describe('user account API', () => {
   beforeEach(() => {
     ddbMock.reset();
+    s3Mock.reset();
+    s3Mock.on(PutObjectCommand).resolves({});
   });
 
   it('creates a user and never returns the password hash', async () => {

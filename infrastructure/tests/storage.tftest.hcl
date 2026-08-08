@@ -66,6 +66,15 @@ mock_provider "aws" {
 run "storage_outputs_are_exposed" {
   command = apply
 
+  # Pinned rather than left to the default: this run exercises the full
+  # root config (no module {} override), so it's exposed to whatever a
+  # developer's local terraform.tfvars sets for identically-named root
+  # variables - and this test isn't mocking the SQS/SES resources that
+  # enable_notifications=true would pull in.
+  variables {
+    enable_notifications = false
+  }
+
   assert {
     condition     = module.storage.users_table_name == "pulsemonitor-dev-users"
     error_message = "Storage module should output the users table name."
@@ -139,6 +148,44 @@ run "users_table_is_on_demand_and_encrypted" {
   assert {
     condition     = aws_dynamodb_table.users.point_in_time_recovery[0].enabled == true
     error_message = "Users table must have point-in-time recovery enabled."
+  }
+
+  assert {
+    condition     = one(aws_dynamodb_table.users.global_secondary_index).name == "user_id-index"
+    error_message = "Users table must have a user_id-index GSI so the notifier can resolve a site's owner email from user_id."
+  }
+
+  assert {
+    condition     = one(aws_dynamodb_table.users.global_secondary_index).hash_key == "user_id"
+    error_message = "user_id-index must be keyed on user_id."
+  }
+
+  assert {
+    condition     = one(aws_dynamodb_table.users.global_secondary_index).projection_type == "KEYS_ONLY"
+    error_message = "user_id-index must project KEYS_ONLY: a wider projection would place password_hash inside an index the notifier role can Query."
+  }
+}
+
+run "storage_module_exposes_user_id_index" {
+  command = apply
+
+  module {
+    source = "./modules/storage"
+  }
+
+  variables {
+    project_name = "pulsemonitor"
+    environment  = "dev"
+  }
+
+  assert {
+    condition     = endswith(output.users_user_id_index_arn, "/index/user_id-index")
+    error_message = "Storage module should output the user_id-index ARN so the notifier IAM policy can reference it."
+  }
+
+  assert {
+    condition     = output.users_user_id_index_name == "user_id-index"
+    error_message = "Storage module should output the user_id-index name."
   }
 }
 
@@ -348,5 +395,107 @@ run "monitoring_history_retention_is_configurable" {
       r.id == "expire-raw-pings" && r.expiration[0].days == 30
     ])
     error_message = "monitoring_history_retention_days should flow through to the lifecycle rule."
+  }
+}
+
+run "user_data_expires_exports" {
+  command = plan
+
+  module {
+    source = "./modules/storage"
+  }
+
+  variables {
+    project_name = "pulsemonitor"
+    environment  = "dev"
+  }
+
+  assert {
+    condition = anytrue([
+      for r in aws_s3_bucket_lifecycle_configuration.user_data.rule :
+      r.id == "expire-exports" && r.status == "Enabled" && r.expiration[0].days == 7 && r.filter[0].prefix == "exports/"
+    ])
+    error_message = "user-data bucket must expire exports after 7 days under the exports/ prefix."
+  }
+
+  assert {
+    condition = anytrue([
+      for r in aws_s3_bucket_lifecycle_configuration.user_data.rule :
+      r.id == "expire-noncurrent" && can(r.noncurrent_version_expiration[0].noncurrent_days)
+    ])
+    error_message = "user-data bucket must expire noncurrent versions, otherwise exports are retained forever despite the expiration rule."
+  }
+}
+
+run "user_data_export_retention_is_configurable" {
+  command = plan
+
+  module {
+    source = "./modules/storage"
+  }
+
+  variables {
+    project_name          = "pulsemonitor"
+    environment           = "dev"
+    export_retention_days = 14
+  }
+
+  assert {
+    condition = anytrue([
+      for r in aws_s3_bucket_lifecycle_configuration.user_data.rule :
+      r.id == "expire-exports" && r.expiration[0].days == 14
+    ])
+    error_message = "export_retention_days should flow through to the lifecycle rule."
+  }
+}
+
+run "audit_logs_expires_events" {
+  command = plan
+
+  module {
+    source = "./modules/storage"
+  }
+
+  variables {
+    project_name = "pulsemonitor"
+    environment  = "dev"
+  }
+
+  assert {
+    condition = anytrue([
+      for r in aws_s3_bucket_lifecycle_configuration.audit_logs.rule :
+      r.id == "expire-audit-events" && r.status == "Enabled" && r.expiration[0].days == 365 && r.filter[0].prefix == "audit/"
+    ])
+    error_message = "audit-logs bucket must expire events after 365 days under the audit/ prefix."
+  }
+
+  assert {
+    condition = anytrue([
+      for r in aws_s3_bucket_lifecycle_configuration.audit_logs.rule :
+      r.id == "expire-noncurrent" && can(r.noncurrent_version_expiration[0].noncurrent_days)
+    ])
+    error_message = "audit-logs bucket must expire noncurrent versions, otherwise events are retained forever despite the expiration rule."
+  }
+}
+
+run "audit_logs_retention_is_configurable" {
+  command = plan
+
+  module {
+    source = "./modules/storage"
+  }
+
+  variables {
+    project_name         = "pulsemonitor"
+    environment          = "dev"
+    audit_retention_days = 180
+  }
+
+  assert {
+    condition = anytrue([
+      for r in aws_s3_bucket_lifecycle_configuration.audit_logs.rule :
+      r.id == "expire-audit-events" && r.expiration[0].days == 180
+    ])
+    error_message = "audit_retention_days should flow through to the lifecycle rule."
   }
 }

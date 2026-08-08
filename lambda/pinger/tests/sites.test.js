@@ -77,6 +77,17 @@ describe('scanDueSites', () => {
     expect(call.ExpressionAttributeNames['#status']).toBe('status');
   });
 
+  it('requests last_status_change_at in the Scan projection', async () => {
+    const ddb = docClientMock();
+    ddb.on(ScanCommand).resolves({ Items: [] });
+
+    await scanDueSites(ddb, 'pulsemonitor-dev-sites', { now: NOW });
+
+    const call = ddb.commandCalls(ScanCommand)[0].args[0].input;
+    // Needed by the notifier to compute downtime duration on a recovery email.
+    expect(call.ProjectionExpression).toContain('last_status_change_at');
+  });
+
   it('paginates and filters out disabled sites', async () => {
     const ddb = docClientMock();
     ddb
@@ -218,6 +229,81 @@ describe('writeSiteStatus', () => {
     expect(call.ExpressionAttributeValues[':one']).toBe(1);
     // Still down - status did not flip, so last_status_change_at is untouched.
     expect(call.UpdateExpression).not.toContain('last_status_change_at');
+  });
+
+  it('returns statusChanged: true and previousStatus: null on a site\'s first check', async () => {
+    const ddb = docClientMock();
+    ddb.on(UpdateCommand).resolves({});
+
+    const transition = await writeSiteStatus(ddb, 'pulsemonitor-dev-sites', {
+      userId: 'u1',
+      siteId: 's1',
+      previousStatus: undefined,
+      result: { status: 'down', status_code: null, latency_ms: null, error_type: 'timeout', error_message: 'timed out' },
+      checkedAt: '2026-08-02T14:05:03.123Z',
+    });
+
+    expect(transition).toEqual({ statusChanged: true, previousStatus: null, status: 'down' });
+  });
+
+  it('returns statusChanged: true on a transition from up to down', async () => {
+    const ddb = docClientMock();
+    ddb.on(UpdateCommand).resolves({});
+
+    const transition = await writeSiteStatus(ddb, 'pulsemonitor-dev-sites', {
+      userId: 'u1',
+      siteId: 's1',
+      previousStatus: 'up',
+      result: { status: 'down', status_code: null, latency_ms: null, error_type: 'timeout', error_message: 'timed out' },
+      checkedAt: '2026-08-02T14:05:03.123Z',
+    });
+
+    expect(transition).toEqual({ statusChanged: true, previousStatus: 'up', status: 'down' });
+  });
+
+  it('returns statusChanged: true on a transition from down to up', async () => {
+    const ddb = docClientMock();
+    ddb.on(UpdateCommand).resolves({});
+
+    const transition = await writeSiteStatus(ddb, 'pulsemonitor-dev-sites', {
+      userId: 'u1',
+      siteId: 's1',
+      previousStatus: 'down',
+      result: { status: 'up', status_code: 200, latency_ms: 100, error_type: null, error_message: null },
+      checkedAt: '2026-08-02T14:05:03.123Z',
+    });
+
+    expect(transition).toEqual({ statusChanged: true, previousStatus: 'down', status: 'up' });
+  });
+
+  it('returns statusChanged: false when up stays up', async () => {
+    const ddb = docClientMock();
+    ddb.on(UpdateCommand).resolves({});
+
+    const transition = await writeSiteStatus(ddb, 'pulsemonitor-dev-sites', {
+      userId: 'u1',
+      siteId: 's1',
+      previousStatus: 'up',
+      result: { status: 'up', status_code: 200, latency_ms: 100, error_type: null, error_message: null },
+      checkedAt: '2026-08-02T14:05:03.123Z',
+    });
+
+    expect(transition).toEqual({ statusChanged: false, previousStatus: 'up', status: 'up' });
+  });
+
+  it('returns statusChanged: false when down stays down', async () => {
+    const ddb = docClientMock();
+    ddb.on(UpdateCommand).resolves({});
+
+    const transition = await writeSiteStatus(ddb, 'pulsemonitor-dev-sites', {
+      userId: 'u1',
+      siteId: 's1',
+      previousStatus: 'down',
+      result: { status: 'down', status_code: null, latency_ms: null, error_type: 'timeout', error_message: 'timed out' },
+      checkedAt: '2026-08-02T14:05:03.123Z',
+    });
+
+    expect(transition).toEqual({ statusChanged: false, previousStatus: 'down', status: 'down' });
   });
 
   it('swallows nothing itself - ConditionalCheckFailedException propagates to the caller', async () => {

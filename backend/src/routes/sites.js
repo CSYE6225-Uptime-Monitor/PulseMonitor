@@ -3,20 +3,33 @@ const siteService = require('../services/siteService');
 const historyService = require('../services/historyService');
 const requireAuth = require('../middleware/requireAuth');
 const validate = require('../middleware/validate');
+const audit = require('../middleware/audit');
 const { doubleCsrfProtection } = require('../middleware/csrf');
 const { createSiteSchema, updateSiteSchema, siteIdParamSchema } = require('../schemas/siteSchemas');
 const { historyQuerySchema } = require('../schemas/historySchemas');
+const { AUDIT_EVENTS } = require('../utils/auditEvents');
 
 const router = express.Router();
 
-router.post('/v1/sites', requireAuth, doubleCsrfProtection, validate(createSiteSchema), async (req, res, next) => {
-  try {
-    const site = await siteService.createSite(req.session.user_id, req.validated);
-    res.status(201).json({ success: true, data: site, error: null });
-  } catch (error) {
-    next(error);
+router.post(
+  '/v1/sites',
+  requireAuth,
+  doubleCsrfProtection,
+  validate(createSiteSchema),
+  audit({ eventType: AUDIT_EVENTS.SITE_CREATED, resourceType: 'site' }),
+  async (req, res, next) => {
+    try {
+      const site = await siteService.createSite(req.session.user_id, req.validated);
+      // The site_id is only known after creation, so it must be supplied
+      // here - the default req.params.id extraction has nothing to read on
+      // a POST to the collection endpoint.
+      res.locals.audit = { resource_id: site.site_id };
+      res.status(201).json({ success: true, data: site, error: null });
+    } catch (error) {
+      next(error);
+    }
   }
-});
+);
 
 router.get('/v1/sites', requireAuth, async (req, res, next) => {
   try {
@@ -42,6 +55,7 @@ router.put(
   validate(siteIdParamSchema, 'params'),
   doubleCsrfProtection,
   validate(updateSiteSchema),
+  audit({ eventType: AUDIT_EVENTS.SITE_UPDATED, resourceType: 'site' }),
   async (req, res, next) => {
     try {
       const site = await siteService.updateSite(req.session.user_id, req.validatedParams.id, req.validated);
@@ -57,6 +71,7 @@ router.delete(
   requireAuth,
   validate(siteIdParamSchema, 'params'),
   doubleCsrfProtection,
+  audit({ eventType: AUDIT_EVENTS.SITE_DELETED, resourceType: 'site' }),
   async (req, res, next) => {
     try {
       await siteService.deleteSite(req.session.user_id, req.validatedParams.id);

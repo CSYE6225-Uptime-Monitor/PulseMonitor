@@ -61,3 +61,23 @@ output "app_url" {
   description = "HTTP URL of the ALB (until the DNS/ACM module is live)."
   value       = module.compute.app_url
 }
+
+output "site_events_bus_name" {
+  description = "Name of the custom EventBridge bus the pinger publishes SiteStatusChanged events to. Null when enable_notifications is false."
+  value       = module.monitoring.site_events_bus_name
+}
+
+output "notifier_function_name" {
+  description = "Name of the notifier Lambda function. Null when enable_notifications is false."
+  value       = module.monitoring.notifier_function_name
+}
+
+output "notifier_dlq_url" {
+  description = "URL of the notifier's dead-letter queue. Null when enable_notifications is false."
+  value       = module.monitoring.notifier_dlq_url
+}
+
+output "ses_dkim_tokens" {
+  description = "The 3 DKIM CNAME record names/values to publish at the domain registrar to verify notification_sender_domain. Null when enable_notifications is false. Terraform cannot complete this verification - apply succeeds while it is still pending."
+  value       = module.monitoring.ses_dkim_tokens
+}

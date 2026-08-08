@@ -1,0 +1,17 @@
+{
+  "name": "pulsemonitor-notifier",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest --coverage"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1095.0",
+    "@aws-sdk/client-sesv2": "^3.1095.0",
+    "@aws-sdk/lib-dynamodb": "^3.1095.0"
+  },
+  "devDependencies": {
+    "aws-sdk-client-mock": "^4.1.0",
+    "jest": "^30.4.2"
+  }
+}

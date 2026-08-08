@@ -1,0 +1,219 @@
+name: deploy
+
+# Continuous deployment to the dev environment on merge to main.
+#
+# Flow: test-gated -> (rebuild AMI only if app code changed) -> terraform apply.
+# The ASG's instance_refresh (Rolling, min_healthy_percentage 50,
+# auto_rollback) is what turns a new AMI into a zero-downtime rollout, so
+# this workflow only has to produce the AMI and apply - AWS does the rest.
+#
+# Auth is OIDC: no long-lived AWS keys live in GitHub. The role is created by
+# infrastructure/bootstrap and trusts only this repo's main branch.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "lambda/**"
+      - "infrastructure/**"
+      - "packer/**"
+      - "scripts/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+    inputs:
+      force_ami_rebuild:
+        description: "Rebuild the AMI even if no application code changed"
+        type: boolean
+        default: false
+
+# Two applies against one state file will fight over the lock and can leave
+# a half-rolled ASG. Never cancel an in-flight deploy - queue behind it.
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # required to mint the OIDC token
+
+env:
+  AWS_REGION: us-east-1
+  TF_VAR_FILE: environments/dev.tfvars
+  # infrastructure/backend.hcl is gitignored, so CI cannot read it. These are
+  # the same non-secret values it holds (see backend.hcl.example) and are
+  # passed to `terraform init` as inline partial-backend config instead.
+  TF_BACKEND_BUCKET: pulsemonitor-tfstate
+  TF_BACKEND_DYNAMODB_TABLE: pulsemonitor-tf-locks
+
+jobs:
+  # Deploying untested code is worse than not deploying. ci.yml runs on PRs;
+  # this re-runs the same suites on the merge commit so a bad merge (or a
+  # direct push to main) can't reach production.
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { name: backend, dir: backend }
+          - { name: pinger, dir: lambda/pinger }
+          - { name: notifier, dir: lambda/notifier }
+          - { name: frontend, dir: frontend }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+        working-directory: ${{ matrix.dir }}
+      - run: npm test
+        working-directory: ${{ matrix.dir }}
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need the previous commit to diff against for AMI change detection.
+          fetch-depth: 0
+
+      - name: Verify the deploy role is configured
+        env:
+          ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          if [ -z "$ROLE_ARN" ]; then
+            echo "::error::Repository variable AWS_DEPLOY_ROLE_ARN is not set."
+            echo "Run 'terraform apply' in infrastructure/bootstrap, then set it from the"
+            echo "github_deploy_role_arn output (Settings > Secrets and variables > Actions > Variables)."
+            exit 1
+          fi
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: pulsemonitor-deploy-${{ github.run_id }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.8"
+          terraform_wrapper: false
+
+      # Rebuilding the AMI takes ~10 minutes and rolls both instances, so
+      # skip it when only Terraform or Lambda code changed - those apply
+      # without touching the launch template.
+      - name: Decide whether the AMI needs rebuilding
+        id: ami_needed
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          FORCED: ${{ github.event.inputs.force_ami_rebuild }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "$FORCED" = "true" ]; then
+            echo "reason=forced via workflow_dispatch" >> "$GITHUB_OUTPUT"
+            echo "rebuild=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # All-zero SHA means no usable "before" (first push, or a dispatch):
+          # rebuild rather than risk shipping stale application code.
+          if [ "$EVENT" != "push" ] || [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "reason=no comparable previous commit" >> "$GITHUB_OUTPUT"
+            echo "rebuild=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --name-only "$BEFORE" "$AFTER" \
+               | grep -qE '^(backend|frontend|packer|scripts)/'; then
+            echo "reason=application code changed" >> "$GITHUB_OUTPUT"
+            echo "rebuild=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "reason=only infrastructure/lambda changed" >> "$GITHUB_OUTPUT"
+            echo "rebuild=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report AMI decision
+        env:
+          REBUILD: ${{ steps.ami_needed.outputs.rebuild }}
+          REASON: ${{ steps.ami_needed.outputs.reason }}
+        run: |
+          echo "Rebuild AMI: $REBUILD ($REASON)"
+
+      - uses: hashicorp/setup-packer@v3
+        if: steps.ami_needed.outputs.rebuild == 'true'
+        with:
+          version: "1.15.4"
+
+      - name: Package application artifacts
+        if: steps.ami_needed.outputs.rebuild == 'true'
+        run: ./scripts/package-artifacts.sh
+
+      # Packer needs a subnet with a route to an internet gateway. This
+      # account's default VPC has neither subnets nor an IGW (and the project
+      # rubric forbids using it anyway), so build inside the public subnet
+      # Terraform already manages. Resolved by tag rather than a Terraform
+      # output so this step needs no state access.
+      - name: Resolve a public subnet for the Packer build
+        if: steps.ami_needed.outputs.rebuild == 'true'
+        id: subnet
+        run: |
+          set -euo pipefail
+          SUBNET_ID=$(aws ec2 describe-subnets \
+            --filters "Name=tag:Name,Values=pulsemonitor-dev-public-*" \
+                      "Name=state,Values=available" \
+            --query 'Subnets[0].SubnetId' --output text)
+          if [ -z "$SUBNET_ID" ] || [ "$SUBNET_ID" = "None" ]; then
+            echo "::error::No pulsemonitor-dev-public-* subnet found. Apply the network module before deploying."
+            exit 1
+          fi
+          echo "Using subnet $SUBNET_ID"
+          echo "subnet_id=$SUBNET_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Build AMI
+        if: steps.ami_needed.outputs.rebuild == 'true'
+        working-directory: packer
+        env:
+          SUBNET_ID: ${{ steps.subnet.outputs.subnet_id }}
+        run: |
+          packer init backend-ami.pkr.hcl
+          packer build -var="subnet_id=${SUBNET_ID}" backend-ami.pkr.hcl
+
+      # data.aws_ami.app selects the newest AMI tagged
+      # Application=pulsemonitor-backend, so a fresh build is picked up here
+      # with no variable to thread through.
+      - name: Terraform init
+        working-directory: infrastructure
+        run: |
+          terraform init -reconfigure -input=false \
+            -backend-config="bucket=${TF_BACKEND_BUCKET}" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=${TF_BACKEND_DYNAMODB_TABLE}"
+
+      - name: Terraform plan
+        working-directory: infrastructure
+        run: |
+          terraform plan -input=false -lock-timeout=5m \
+            -var-file="${TF_VAR_FILE}" -out=deploy.tfplan
+
+      - name: Terraform apply
+        working-directory: infrastructure
+        run: terraform apply -input=false -lock-timeout=5m deploy.tfplan
+
+      - name: Summarise
+        if: always()
+        working-directory: infrastructure
+        env:
+          REBUILD: ${{ steps.ami_needed.outputs.rebuild }}
+          REASON: ${{ steps.ami_needed.outputs.reason }}
+        run: |
+          {
+            echo "### PulseMonitor deploy"
+            echo ""
+            echo "- AMI rebuilt: \`${REBUILD}\` (${REASON})"
+            echo "- App URL: $(terraform output -raw app_url 2>/dev/null || echo 'n/a')"
+          } >> "$GITHUB_STEP_SUMMARY"

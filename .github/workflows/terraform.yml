@@ -31,11 +31,18 @@ jobs:
         with:
           node-version: "22"
 
-      # archive_file zips lambda/pinger/ during `terraform test`/`plan`, so
-      # node_modules must hold production deps only - mirrors the AMI's
-      # "npm ci --omit=dev" convention for the backend.
+      # archive_file zips lambda/pinger/ and lambda/notifier/ during
+      # `terraform test`/`plan`, so node_modules must hold production deps
+      # only - mirrors the AMI's "npm ci --omit=dev" convention for the
+      # backend. The zip builds successfully even with node_modules missing
+      # entirely, so skipping this step doesn't fail CI - it just ships a
+      # Lambda that fails at runtime with no test catching it.
       - name: Install pinger production dependencies
         working-directory: lambda/pinger
+        run: npm ci --omit=dev
+
+      - name: Install notifier production dependencies
+        working-directory: lambda/notifier
         run: npm ci --omit=dev
 
       - name: Format check
@@ -62,6 +69,21 @@ jobs:
     defaults:
       run:
         working-directory: lambda/pinger
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: npm ci
+      - run: npm test
+
+  notifier:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lambda/notifier
     steps:
       - uses: actions/checkout@v4
 

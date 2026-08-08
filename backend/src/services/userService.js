@@ -48,9 +48,30 @@ async function verifyCredentials(email, password) {
   // than a one-off migration script, assign it the first time such an
   // account logs in and persist it - the sites table (and its S3 history
   // keys) are keyed on this id, so it must exist before any site can be created.
+  //
+  // Conditioned on attribute_not_exists(user_id): two concurrent logins on
+  // the same legacy account would otherwise both pass the `!user.user_id`
+  // check above and each write a different UUID, with the loser's write
+  // silently winning or losing depending on request timing - and the
+  // loser's own sites (created against the UUID it thought was current)
+  // would then be permanently unreachable via the notifier's user_id-index
+  // lookup. On a losing race, re-read the row: some other request has
+  // already backfilled it, so use that value instead of retrying.
   if (!user.user_id) {
-    const updated = await userRepository.update(email, { user_id: randomUUID() });
-    return toSafeUser(updated);
+    try {
+      const updated = await userRepository.update(
+        email,
+        { user_id: randomUUID() },
+        { conditionExpression: 'attribute_not_exists(user_id)' }
+      );
+      return toSafeUser(updated);
+    } catch (error) {
+      if (error.name === 'ConditionalCheckFailedException') {
+        const winner = await userRepository.findByEmail(email);
+        return toSafeUser(winner);
+      }
+      throw error;
+    }
   }
 
   return toSafeUser(user);
@@ -69,4 +90,4 @@ async function updateSelf(email, updates) {
   return toSafeUser(user);
 }
 
-module.exports = { createUser, verifyCredentials, getSelf, updateSelf };
+module.exports = { createUser, verifyCredentials, getSelf, updateSelf, toSafeUser };

@@ -70,7 +70,7 @@ resource "aws_iam_role_policy" "pinger" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
+    Statement = concat([
       {
         Sid      = "WriteOwnLogs"
         Effect   = "Allow"
@@ -95,7 +95,14 @@ resource "aws_iam_role_policy" "pinger" {
         Action   = ["s3:PutObject"]
         Resource = ["${var.monitoring_history_bucket_arn}/${var.history_prefix}/*"]
       },
-    ]
+      ], var.enable_notifications ? [
+      {
+        Sid      = "PublishStatusChanges"
+        Effect   = "Allow"
+        Action   = ["events:PutEvents"]
+        Resource = [aws_cloudwatch_event_bus.site_events[0].arn]
+      },
+    ] : [])
   })
 }
 
@@ -111,19 +118,24 @@ resource "aws_lambda_function" "pinger" {
 
   timeout                        = var.lambda_timeout
   memory_size                    = var.lambda_memory_mb
-  reserved_concurrent_executions = 1
+  reserved_concurrent_executions = var.lambda_reserved_concurrency
 
   environment {
-    variables = {
-      SITES_TABLE      = var.sites_table_name
-      HISTORY_BUCKET   = var.monitoring_history_bucket
-      HISTORY_PREFIX   = var.history_prefix
-      PING_TIMEOUT_MS  = tostring(var.ping_timeout_ms)
-      MAX_CONCURRENCY  = tostring(var.max_concurrency)
-      METRIC_NAMESPACE = var.metric_namespace
-      ENVIRONMENT      = var.environment
-      LOG_LEVEL        = var.log_level
-    }
+    variables = merge(
+      {
+        SITES_TABLE      = var.sites_table_name
+        HISTORY_BUCKET   = var.monitoring_history_bucket
+        HISTORY_PREFIX   = var.history_prefix
+        PING_TIMEOUT_MS  = tostring(var.ping_timeout_ms)
+        MAX_CONCURRENCY  = tostring(var.max_concurrency)
+        METRIC_NAMESPACE = var.metric_namespace
+        ENVIRONMENT      = var.environment
+        LOG_LEVEL        = var.log_level
+      },
+      # Absent (not empty-string) when disabled, so the pinger's own
+      # readEnv() treats notifications as off and skips publishing entirely.
+      var.enable_notifications ? { EVENT_BUS_NAME = aws_cloudwatch_event_bus.site_events[0].name } : {}
+    )
   }
 
   depends_on = [aws_cloudwatch_log_group.pinger, aws_iam_role_policy.pinger]
