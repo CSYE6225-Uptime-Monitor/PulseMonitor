@@ -20,7 +20,15 @@ export default function DashboardPage() {
   }
 
   async function handleLogout() {
-    await logout();
+    // logout() clears local session state even when the request fails, but it
+    // still rethrows (see auth.test.tsx). Catching here keeps an already-expired
+    // session from surfacing as an unhandled rejection, and makes the redirect
+    // explicit rather than leaving it to useRequireAuth noticing user went null.
+    try {
+      await logout();
+    } catch {
+      // Nothing actionable to show - the local session is cleared either way.
+    }
     router.push("/login");
   }
 

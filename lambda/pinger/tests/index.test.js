@@ -114,4 +114,48 @@ describe('handler', () => {
       await expect(handler({}, {})).resolves.toMatchObject({ checked: 1 });
     });
   });
+
+  describe('per-site failure isolation', () => {
+    it('does not abort the whole cycle when one site throws a non-conditional error', async () => {
+      scanDueSites.mockResolvedValue([
+        { user_id: 'u1', site_id: 's1', url: 'https://a.com', status: 'up' },
+        { user_id: 'u1', site_id: 's2', url: 'https://b.com', status: 'up' },
+      ]);
+      pingUrl.mockResolvedValue({ status: 'up', status_code: 200, latency_ms: 50, error_type: null, error_message: null });
+      writeSiteStatus.mockImplementation(async (_docClient, _table, { siteId }) => {
+        if (siteId === 's1') {
+          throw new Error('ProvisionedThroughputExceededException');
+        }
+        return { statusChanged: false, previousStatus: 'up', status: 'up' };
+      });
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const outcome = await handler({}, {});
+
+      expect(outcome.total).toBe(2);
+      expect(outcome.checked).toBe(1);
+      expect(outcome.failed).toBe(1);
+      expect(outcome.results.find((r) => r.siteId === 's1')).toEqual({ siteId: 's1', failed: true });
+      expect(errorSpy).toHaveBeenCalled();
+
+      errorSpy.mockRestore();
+    });
+  });
+
+  describe('time-budget cutoff', () => {
+    it('stops early without throwing and logs a warning instead of silently starving sites', async () => {
+      scanDueSites.mockResolvedValue([{ user_id: 'u1', site_id: 's1', url: 'https://a.com', status: 'up' }]);
+      pingUrl.mockResolvedValue({ status: 'up', status_code: 200, latency_ms: 50, error_type: null, error_message: null });
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const context = { getRemainingTimeInMillis: () => 1000 };
+
+      const outcome = await handler({}, context);
+
+      expect(outcome.checked).toBe(0);
+      expect(outcome.total).toBe(1);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+
+      warnSpy.mockRestore();
+    });
+  });
 });

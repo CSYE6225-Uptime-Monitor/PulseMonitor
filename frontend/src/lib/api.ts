@@ -52,9 +52,36 @@ export function clearCsrfToken(): void {
   csrfToken = null;
 }
 
+type UnauthorizedListener = () => void;
+let unauthorizedListener: UnauthorizedListener | null = null;
+
+/**
+ * Registers a callback fired whenever any request resolves with 401 - lets
+ * the app react to a session expiring mid-use (see auth.tsx), not just on
+ * the initial mount check. Pass null to unsubscribe.
+ */
+export function onUnauthorized(listener: UnauthorizedListener | null): void {
+  unauthorizedListener = listener;
+}
+
+/**
+ * A 502/504 from a proxy or load balancer returns an HTML error page, not
+ * JSON - res.json() throws a SyntaxError in that case. Surfacing that as an
+ * ApiError (not a bare Error) keeps every `err instanceof ApiError` check in
+ * the app working, instead of e.g. AuthProvider's mount check treating it
+ * like "not logged in" and silently signing out a valid session.
+ */
+async function readEnvelope<T>(res: Response): Promise<ApiEnvelope<T>> {
+  try {
+    return (await res.json()) as ApiEnvelope<T>;
+  } catch {
+    throw new ApiError(res.status, `Request failed with status ${res.status}.`);
+  }
+}
+
 async function fetchCsrfToken(): Promise<string> {
   const res = await fetch("/api/v1/csrf-token", { credentials: "include" });
-  const body = (await res.json()) as ApiEnvelope<{ csrfToken: string }>;
+  const body = await readEnvelope<{ csrfToken: string }>(res);
 
   if (!body.success || !body.data) {
     throw new ApiError(res.status, body.error ?? "Failed to fetch CSRF token.");
@@ -80,7 +107,7 @@ async function performRequest<T>(method: string, path: string, isMutating: boole
     return { res, data: undefined as T };
   }
 
-  const envelope = (await res.json()) as ApiEnvelope<T>;
+  const envelope = await readEnvelope<T>(res);
   return { res, envelope };
 }
 
@@ -107,6 +134,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   }
 
   if (!envelope || !envelope.success) {
+    if (res.status === 401) {
+      unauthorizedListener?.();
+    }
     throw new ApiError(res.status, envelope?.error ?? "Request failed.");
   }
 

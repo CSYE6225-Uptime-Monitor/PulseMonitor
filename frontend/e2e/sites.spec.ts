@@ -26,10 +26,16 @@ test("add a site, see it listed, edit it, then delete it", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Example Site" })).toBeVisible();
   await expect(page.getByText("No history yet.")).toBeVisible();
 
-  await page.getByLabel("Name").fill("Renamed Site");
+  await page.getByLabel("Name").fill("  Renamed Site  ");
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByRole("heading", { name: "Renamed Site" })).toBeVisible();
+  // The backend trims the name; the form must re-sync to that normalized
+  // value and disable Save again, not keep showing the untrimmed text with
+  // the button stuck enabled.
+  await expect(page.getByLabel("Name")).toHaveValue("Renamed Site");
+  await expect(page.getByRole("button", { name: "Save changes" })).toBeDisabled();
 
+  page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Delete site" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByText(/no sites yet/i)).toBeVisible();
