@@ -25,18 +25,28 @@ environment = "dev" # NOT "prod": that enables ALB deletion protection and
 bucket_force_destroy = true # lets `terraform destroy` succeed once the
 # pinger and e2e suite have written objects
 
-# Per-owner down/recovery emails. Verified as a single SES email identity
-# (zero DNS work) with every notification redirected to that same mailbox,
-# which is what makes this demonstrable while SES is still in the sandbox.
-# Swap identity_type to "domain" and clear the override once Route 53 lands
-# and SES production access is granted.
+# Per-owner down/recovery emails. Now on the "domain" identity (Route 53 is
+# live, so module.dns publishes the 3 DKIM CNAMEs automatically - see
+# ses_dkim_tokens/enable_ses_dkim wiring in the root module). SES account is
+# still in the sandbox (ProductionAccessEnabled: false as of this writing -
+# confirm with `aws sesv2 get-account`), so every notification still
+# redirects to one verified mailbox via notification_override_recipient.
+#
+# notification_verified_recipients MUST list that override address: it used
+# to be verified "for free" as the sender identity itself back in "email"
+# mode, but the domain switch replaces that identity, so the address needs
+# its own explicit verified-recipient identity or sandbox sends to it bounce.
+# AWS emails a verification link to the address itself after apply - click
+# it before expecting any notification to actually arrive.
+#
+# Clear the override (and this list) once SES production access is granted -
+# that's a separate AWS support request, not something Terraform can do.
 enable_notifications              = true
-notification_sender_identity_type = "email"
-notification_sender_email         = "aswathappa.d@northeastern.edu"
-notification_sender_domain        = ""
+notification_sender_identity_type = "domain"
+notification_sender_domain        = "pulsemonitor.online"
+notification_sender_email         = "alerts@pulsemonitor.online"
 notification_override_recipient   = "aswathappa.d@northeastern.edu"
-notification_verified_recipients  = [] # must stay empty in "email" mode -
-# the sender identity already verifies that mailbox as a recipient
+notification_verified_recipients  = ["aswathappa.d@northeastern.edu"]
 
 # Route 53 / ACM / WAF (module.dns). pulsemonitor.online is registered at an
 # external registrar (Namecheap) with no nameserver delegation yet, so both

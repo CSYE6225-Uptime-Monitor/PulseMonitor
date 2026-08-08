@@ -333,6 +333,20 @@ resource "aws_sesv2_email_identity" "verified_recipients" {
   email_identity = each.value
 
   tags = { Name = "${local.name_prefix}-notification-recipient" }
+
+  # Guards a real ordering hazard, not a hypothetical one: switching
+  # notification_sender_identity_type from "email" to "domain" changes
+  # aws_sesv2_email_identity.sender's email_identity argument, forcing a
+  # replace (destroy the old address's identity, create the new domain
+  # identity). If that old sender address is ALSO added here as a verified
+  # recipient in the same apply - exactly what happens when you keep using it
+  # via notification_override_recipient after the switch - this resource and
+  # sender's replace have no reference-based edge between them, so Terraform
+  # could run this address's CreateEmailIdentity in parallel with (or before)
+  # sender's DeleteEmailIdentity for that same address, racing SES's
+  # per-address uniqueness. depends_on forces sender's full destroy+create to
+  # finish first.
+  depends_on = [aws_sesv2_email_identity.sender]
 }
 
 resource "aws_sesv2_configuration_set" "notifications" {
