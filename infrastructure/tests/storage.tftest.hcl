@@ -350,3 +350,105 @@ run "monitoring_history_retention_is_configurable" {
     error_message = "monitoring_history_retention_days should flow through to the lifecycle rule."
   }
 }
+
+run "user_data_expires_exports" {
+  command = plan
+
+  module {
+    source = "./modules/storage"
+  }
+
+  variables {
+    project_name = "pulsemonitor"
+    environment  = "dev"
+  }
+
+  assert {
+    condition = anytrue([
+      for r in aws_s3_bucket_lifecycle_configuration.user_data.rule :
+      r.id == "expire-exports" && r.status == "Enabled" && r.expiration[0].days == 7 && r.filter[0].prefix == "exports/"
+    ])
+    error_message = "user-data bucket must expire exports after 7 days under the exports/ prefix."
+  }
+
+  assert {
+    condition = anytrue([
+      for r in aws_s3_bucket_lifecycle_configuration.user_data.rule :
+      r.id == "expire-noncurrent" && can(r.noncurrent_version_expiration[0].noncurrent_days)
+    ])
+    error_message = "user-data bucket must expire noncurrent versions, otherwise exports are retained forever despite the expiration rule."
+  }
+}
+
+run "user_data_export_retention_is_configurable" {
+  command = plan
+
+  module {
+    source = "./modules/storage"
+  }
+
+  variables {
+    project_name          = "pulsemonitor"
+    environment           = "dev"
+    export_retention_days = 14
+  }
+
+  assert {
+    condition = anytrue([
+      for r in aws_s3_bucket_lifecycle_configuration.user_data.rule :
+      r.id == "expire-exports" && r.expiration[0].days == 14
+    ])
+    error_message = "export_retention_days should flow through to the lifecycle rule."
+  }
+}
+
+run "audit_logs_expires_events" {
+  command = plan
+
+  module {
+    source = "./modules/storage"
+  }
+
+  variables {
+    project_name = "pulsemonitor"
+    environment  = "dev"
+  }
+
+  assert {
+    condition = anytrue([
+      for r in aws_s3_bucket_lifecycle_configuration.audit_logs.rule :
+      r.id == "expire-audit-events" && r.status == "Enabled" && r.expiration[0].days == 365 && r.filter[0].prefix == "audit/"
+    ])
+    error_message = "audit-logs bucket must expire events after 365 days under the audit/ prefix."
+  }
+
+  assert {
+    condition = anytrue([
+      for r in aws_s3_bucket_lifecycle_configuration.audit_logs.rule :
+      r.id == "expire-noncurrent" && can(r.noncurrent_version_expiration[0].noncurrent_days)
+    ])
+    error_message = "audit-logs bucket must expire noncurrent versions, otherwise events are retained forever despite the expiration rule."
+  }
+}
+
+run "audit_logs_retention_is_configurable" {
+  command = plan
+
+  module {
+    source = "./modules/storage"
+  }
+
+  variables {
+    project_name         = "pulsemonitor"
+    environment          = "dev"
+    audit_retention_days = 180
+  }
+
+  assert {
+    condition = anytrue([
+      for r in aws_s3_bucket_lifecycle_configuration.audit_logs.rule :
+      r.id == "expire-audit-events" && r.expiration[0].days == 180
+    ])
+    error_message = "audit_retention_days should flow through to the lifecycle rule."
+  }
+}

@@ -1,0 +1,16 @@
+services:
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      # dynamodb + s3 are both LocalStack Community services (no Pro token
+      # needed) - see infrastructure/README.md for the Pro-only EC2/Lambda
+      # emulation used by the Terraform test harness, which this is not.
+      - SERVICES=dynamodb,s3
+      - DEFAULT_REGION=us-east-1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 30

@@ -31,6 +31,7 @@ export default function SiteDetailPage() {
   const [records, setRecords] = useState<HistoryRecord[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   const loadSite = useCallback(async () => {
     try {
@@ -56,6 +57,12 @@ export default function SiteDetailPage() {
         const page = await getSiteHistory(siteId, cursor ? { cursor } : undefined);
         setRecords((previous) => (cursor ? [...previous, ...page.records] : page.records));
         setNextCursor(page.next_cursor);
+        setHistoryError(null);
+      } catch (err) {
+        // Without this catch, a rejected fetch here escaped as an unhandled
+        // promise rejection through the Promise.all below - e2e ran green
+        // against a genuinely broken endpoint because records simply stayed [].
+        setHistoryError(err instanceof ApiError ? err.message : "Failed to load history.");
       } finally {
         setHistoryLoading(false);
       }
@@ -163,6 +170,14 @@ export default function SiteDetailPage() {
 
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">History</h2>
+        {historyError && (
+          <p
+            role="alert"
+            className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300"
+          >
+            {historyError}
+          </p>
+        )}
         <HistoryTable
           records={records}
           nextCursor={nextCursor}

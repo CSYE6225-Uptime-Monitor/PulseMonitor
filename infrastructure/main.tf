@@ -60,6 +60,7 @@ module "compute" {
   user_data_bucket_name          = module.storage.user_data_bucket_name
   user_data_bucket_arn           = module.storage.user_data_bucket_arn
   audit_logs_bucket_arn          = module.storage.audit_logs_bucket_arn
+  audit_logs_bucket_name         = module.storage.audit_logs_bucket_name
   monitoring_history_bucket_name = module.storage.monitoring_history_bucket_name
   monitoring_history_bucket_arn  = module.storage.monitoring_history_bucket_arn
   history_prefix                 = var.history_prefix

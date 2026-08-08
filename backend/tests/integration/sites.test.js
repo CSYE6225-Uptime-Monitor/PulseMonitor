@@ -1,12 +1,17 @@
 const request = require('supertest');
 const { mockClient } = require('aws-sdk-client-mock');
 const { GetCommand, PutCommand, UpdateCommand, DeleteCommand, QueryCommand } = require('@aws-sdk/lib-dynamodb');
+const { PutObjectCommand } = require('@aws-sdk/client-s3');
 const bcrypt = require('bcryptjs');
 
 const { docClient } = require('../../src/db/dynamo');
+const { s3Client } = require('../../src/db/s3');
 const app = require('../../src/app');
 
 const ddbMock = mockClient(docClient);
+// Site mutations (and the login inside loginAgent) now write audit events -
+// without this, PutObjectCommand would hit real AWS.
+const s3Mock = mockClient(s3Client);
 
 const USERS_TABLE = 'pulsemonitor-test-users';
 const SITES_TABLE = 'pulsemonitor-test-sites';
@@ -40,6 +45,8 @@ async function loginAgent() {
 describe('sites API', () => {
   beforeEach(() => {
     ddbMock.reset();
+    s3Mock.reset();
+    s3Mock.on(PutObjectCommand).resolves({});
   });
 
   describe('POST /v1/sites', () => {

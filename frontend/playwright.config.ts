@@ -1,10 +1,12 @@
 import path from "path";
 import { defineConfig, devices } from "@playwright/test";
 
-// Requires DynamoDB Local running (see backend/docker-compose.yml) with the
-// pulsemonitor-dev-users table created before running these tests.
+// Requires LocalStack running (see backend/docker-compose.yml) providing both
+// DynamoDB and S3 on port 4566. globalSetup creates the tables/buckets
+// idempotently, so no manual setup step is required beyond `docker compose up`.
 export default defineConfig({
   testDir: "./e2e",
+  globalSetup: require.resolve("./e2e/global-setup"),
   fullyParallel: false,
   workers: 1,
   reporter: "list",
@@ -25,12 +27,16 @@ export default defineConfig({
         USERS_TABLE: "pulsemonitor-dev-users",
         SITES_TABLE: "pulsemonitor-dev-sites",
         AWS_REGION: "us-east-1",
-        DYNAMODB_ENDPOINT: "http://localhost:8000",
+        DYNAMODB_ENDPOINT: "http://localhost:4566",
         HISTORY_BUCKET: "pulsemonitor-dev-monitoring-history-000000000000",
         HISTORY_PREFIX: "sites",
-        S3_ENDPOINT: "http://localhost:8000",
-        AWS_ACCESS_KEY_ID: "local",
-        AWS_SECRET_ACCESS_KEY: "local",
+        USER_DATA_BUCKET: "pulsemonitor-dev-user-data-000000000000",
+        AUDIT_BUCKET: "pulsemonitor-dev-audit-logs-000000000000",
+        EXPORT_PREFIX: "exports",
+        AUDIT_PREFIX: "audit",
+        S3_ENDPOINT: "http://localhost:4566",
+        AWS_ACCESS_KEY_ID: "test",
+        AWS_SECRET_ACCESS_KEY: "test",
       },
     },
     {

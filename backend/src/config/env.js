@@ -24,6 +24,15 @@ function readEnv() {
     historyBucket: process.env.HISTORY_BUCKET,
     historyPrefix: process.env.HISTORY_PREFIX || 'sites',
     s3Endpoint: process.env.S3_ENDPOINT,
+    // Optional, unlike the vars above: the app must still boot (and /healthz
+    // must still answer) when these are unset, so a Terraform apply that
+    // hasn't landed yet can never crash-loop the ASG. Audit writes and the
+    // export endpoints degrade gracefully instead - see auditService/exportService.
+    userDataBucket: process.env.USER_DATA_BUCKET,
+    exportPrefix: process.env.EXPORT_PREFIX || 'exports',
+    auditBucket: process.env.AUDIT_BUCKET,
+    auditPrefix: process.env.AUDIT_PREFIX || 'audit',
+    exportUrlTtlSeconds: Number(process.env.EXPORT_URL_TTL_SECONDS) || 300,
   };
 }
 

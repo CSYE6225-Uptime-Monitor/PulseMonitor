@@ -219,3 +219,93 @@ resource "aws_s3_bucket_lifecycle_configuration" "monitoring_history" {
 
   depends_on = [aws_s3_bucket_versioning.monitoring_history]
 }
+
+# user-data bucket keeps exports for a short, bounded window. Same
+# noncurrent-version trap as monitoring_history above: versioning is on, so
+# `expiration` alone only writes delete markers, leaving every export byte
+# billed forever.
+resource "aws_s3_bucket_lifecycle_configuration" "user_data" {
+  bucket = aws_s3_bucket.user_data.id
+
+  rule {
+    id     = "expire-exports"
+    status = "Enabled"
+
+    filter {
+      prefix = var.export_prefix
+    }
+
+    expiration {
+      days = var.export_retention_days
+    }
+  }
+
+  rule {
+    id     = "expire-noncurrent"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+
+  rule {
+    id     = "abort-incomplete-mpu"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.user_data]
+}
+
+# audit-logs bucket keeps events for a longer window than exports - this is
+# an activity-feed retention policy, not a compliance guarantee (see
+# backend/src/middleware/audit.js: a write here can be lost if the instance
+# terminates mid-request). Same noncurrent-version trap as the other buckets.
+resource "aws_s3_bucket_lifecycle_configuration" "audit_logs" {
+  bucket = aws_s3_bucket.audit_logs.id
+
+  rule {
+    id     = "expire-audit-events"
+    status = "Enabled"
+
+    filter {
+      prefix = var.audit_prefix
+    }
+
+    expiration {
+      days = var.audit_retention_days
+    }
+  }
+
+  rule {
+    id     = "expire-noncurrent"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+
+  rule {
+    id     = "abort-incomplete-mpu"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.audit_logs]
+}

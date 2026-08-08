@@ -69,4 +69,4 @@ async function updateSelf(email, updates) {
   return toSafeUser(user);
 }
 
-module.exports = { createUser, verifyCredentials, getSelf, updateSelf };
+module.exports = { createUser, verifyCredentials, getSelf, updateSelf, toSafeUser };
