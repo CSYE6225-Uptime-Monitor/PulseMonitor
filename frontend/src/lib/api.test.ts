@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { api, ApiError, clearCsrfToken } from "./api";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { api, ApiError, clearCsrfToken, onUnauthorized } from "./api";
 
 function jsonResponse(status: number, body: unknown): Response {
   return {
@@ -12,6 +12,10 @@ describe("api client", () => {
   beforeEach(() => {
     clearCsrfToken();
     vi.unstubAllGlobals();
+  });
+
+  afterEach(() => {
+    onUnauthorized(null);
   });
 
   it("fetches and caches a csrf token before the first mutating request", async () => {
@@ -65,6 +69,27 @@ describe("api client", () => {
     const result = await api.del("/v1/sites/1");
 
     expect(result).toBeUndefined();
+  });
+
+  it("throws an ApiError, not a raw SyntaxError, when the response body isn't JSON", async () => {
+    // Models a 502/504 from a proxy returning an HTML error page.
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 502,
+      json: async () => {
+        throw new SyntaxError("Unexpected token '<'");
+      },
+    } as unknown as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    let caught: unknown;
+    try {
+      await api.get("/v1/sites");
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(ApiError);
+    expect((caught as ApiError).status).toBe(502);
   });
 
   it("throws ApiError with the envelope's error message when success is false", async () => {
@@ -136,6 +161,48 @@ describe("api client", () => {
 
     await expect(api.get("/v1/user/self")).rejects.toThrow(ApiError);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  describe("unauthorized handling", () => {
+    it("invokes the registered listener when a request resolves with 401", async () => {
+      const listener = vi.fn();
+      onUnauthorized(listener);
+
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse(401, { success: false, data: null, error: "Authentication required." }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      await expect(api.get("/v1/user/self")).rejects.toMatchObject({ status: 401 });
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not invoke the listener for non-401 errors", async () => {
+      const listener = vi.fn();
+      onUnauthorized(listener);
+
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse(404, { success: false, data: null, error: "Site not found." }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      await expect(api.get("/v1/sites/missing")).rejects.toMatchObject({ status: 404 });
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it("stops invoking the listener once unsubscribed with null", async () => {
+      const listener = vi.fn();
+      onUnauthorized(listener);
+      onUnauthorized(null);
+
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse(401, { success: false, data: null, error: "Authentication required." }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      await expect(api.get("/v1/user/self")).rejects.toMatchObject({ status: 401 });
+      expect(listener).not.toHaveBeenCalled();
+    });
   });
 
   describe("query params", () => {

@@ -8,6 +8,7 @@ import {
   deleteSite,
   getSite,
   getSiteHistory,
+  getSiteStatus,
   updateSite,
   type HistoryRecord,
   type Site,
@@ -16,6 +17,11 @@ import {
 import { StatusBadge } from "@/components/StatusBadge";
 import { SiteForm, type SiteFormValues } from "@/components/SiteForm";
 import { HistoryTable } from "@/components/HistoryTable";
+
+// Matches the dashboard's poll cadence (useSites.ts) - without this, the
+// status badge and "Last checked"/"Last error" here just freeze at whatever
+// they were when the page loaded, unlike the dashboard which refreshes.
+const STATUS_POLL_INTERVAL_MS = 60_000;
 
 export default function SiteDetailPage() {
   const { user, loading: authLoading } = useRequireAuth();
@@ -32,6 +38,8 @@ export default function SiteDetailPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const loadSite = useCallback(async () => {
     try {
@@ -82,6 +90,38 @@ export default function SiteDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, siteId]);
 
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+    const id = setInterval(async () => {
+      try {
+        const latest = await getSiteStatus(siteId);
+        setSite((current) =>
+          current
+            ? {
+                ...current,
+                status: {
+                  status: latest.status,
+                  status_code: latest.status_code,
+                  latency_ms: latest.latency_ms,
+                  checked_at: latest.checked_at,
+                  error_type: latest.error_type,
+                  error_message: latest.error_message,
+                  consecutive_failures: latest.consecutive_failures,
+                  last_status_change_at: latest.last_status_change_at,
+                },
+              }
+            : current
+        );
+      } catch {
+        // Best-effort background refresh - a transient poll failure shouldn't
+        // clobber the page; loadSite already owns the "real" error state.
+      }
+    }, STATUS_POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [user, siteId]);
+
   if (authLoading || !user) {
     return <p className="p-8 text-zinc-600 dark:text-zinc-400">Loading...</p>;
   }
@@ -117,8 +157,15 @@ export default function SiteDetailPage() {
   }
 
   async function handleDelete() {
-    await deleteSite(siteId);
-    router.push("/dashboard");
+    if (!site || !window.confirm(`Delete ${site.name}? This cannot be undone.`)) {
+      return;
+    }
+    try {
+      await deleteSite(siteId);
+      router.push("/dashboard");
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : "Failed to delete site.");
+    }
   }
 
   const formValues: SiteFormValues = {
@@ -158,7 +205,20 @@ export default function SiteDetailPage() {
         )}
       </dl>
 
-      <SiteForm mode="edit" initialValues={formValues} onSubmit={handleUpdate} />
+      {/* Remount on every successful update: the backend trims/normalizes
+          fields (e.g. name), and SiteForm's local state is only seeded from
+          initialValues on mount - without a fresh key, a save would leave
+          the un-normalized text on screen with "Save changes" stuck enabled. */}
+      <SiteForm key={site.updated_at} mode="edit" initialValues={formValues} onSubmit={handleUpdate} />
+
+      {deleteError && (
+        <p
+          role="alert"
+          className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300"
+        >
+          {deleteError}
+        </p>
+      )}
 
       <button
         type="button"

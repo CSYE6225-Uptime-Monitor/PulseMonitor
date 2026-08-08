@@ -49,13 +49,19 @@ notification_override_recipient   = "aswathappa.d@northeastern.edu"
 notification_verified_recipients  = ["aswathappa.d@northeastern.edu"]
 
 # Route 53 / ACM / WAF (module.dns). pulsemonitor.online is registered at an
-# external registrar (Namecheap) with no nameserver delegation yet, so both
-# stay false here rather than relying on the variables' own defaults - this
-# file's whole point is to apply exactly what a human would, explicitly.
-# enable_dns is non-blocking (creates the zone + a pending certificate);
-# enable_https additionally blocks on certificate validation and requires
-# delegation to already be live - see modules/dns/main.tf's file header and
-# infrastructure/README.md's "HTTPS rollout" section before flipping either.
+# external registrar (Namecheap); nameserver delegation to the Route 53 zone
+# is live, so all three are on. Set explicitly rather than relying on the
+# variables' own defaults - this file's whole point is to apply exactly what
+# a human would, explicitly.
+#
+# Keep this comment in sync with the values below. enable_https is the one
+# with teeth: every apply blocks on aws_acm_certificate_validation (10m
+# resource timeout) while holding the non-cancelling deploy-dev concurrency
+# group, so turning it on before delegation is live stalls each merge to
+# main for 10 minutes before failing. enable_dns is non-blocking by
+# comparison (creates the zone + a pending certificate). See
+# modules/dns/main.tf's file header and infrastructure/README.md's "HTTPS
+# rollout" section before changing either.
 enable_dns   = true
 enable_https = true
 enable_waf   = true
