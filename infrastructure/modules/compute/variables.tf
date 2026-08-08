@@ -88,9 +88,22 @@ variable "asg_desired_capacity" {
 }
 
 variable "certificate_arn" {
-  description = "ACM certificate ARN for the HTTPS listener. Null until the DNS module provisions one - the HTTP listener forwards directly when null, and redirects to HTTPS once set."
+  description = "ACM certificate ARN for the HTTPS listener. Null until the DNS module's certificate is validated."
   type        = string
   default     = null
+}
+
+# Separate from certificate_arn on purpose: count and dynamic{}'s for_each
+# must be known at PLAN time, but certificate_arn is unknown on the very
+# apply that first creates the certificate (aws_acm_certificate_validation's
+# output isn't resolved yet) - gating the listeners on `certificate_arn ==
+# null` would make that apply fail with "Invalid count argument". A plain
+# bool, set by the root module only once the cert is already validated in
+# state, sidesteps the whole class of failure.
+variable "enable_https" {
+  description = "Whether to create the HTTPS listener and redirect HTTP->HTTPS. Requires certificate_arn to be set."
+  type        = bool
+  default     = false
 }
 
 variable "ssl_policy" {

@@ -64,9 +64,16 @@ run "monitoring_outputs_are_wired" {
   # root config (no module {} override), so it's exposed to whatever a
   # developer's local terraform.tfvars sets for identically-named root
   # variables - and this test isn't mocking the SQS/SES resources that
-  # enable_notifications=true would pull in.
+  # enable_notifications=true would pull in, nor the Route 53/ACM/WAF
+  # resources that enable_dns/enable_https/enable_waf would pull in
+  # (aws_acm_certificate's domain_validation_options mocks to an EMPTY set,
+  # which makes the cert-validation records fail on a null name rather than
+  # fail usefully).
   variables {
     enable_notifications = false
+    enable_dns           = false
+    enable_https         = false
+    enable_waf           = false
   }
 
   assert {

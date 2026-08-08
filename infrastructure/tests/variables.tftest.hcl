@@ -57,6 +57,20 @@ mock_provider "aws" {
 run "defaults_are_valid" {
   command = plan
 
+  # Pinned rather than left to the default: this run exercises the full root
+  # config with no overrides, so it's exposed to whatever a developer's local
+  # terraform.tfvars sets for these names - and this file isn't mocking the
+  # Route 53/ACM/WAF resources that enable_dns/enable_https/enable_waf would
+  # pull in (aws_acm_certificate's domain_validation_options mocks to an
+  # EMPTY set, which makes the cert-validation records fail on a null name
+  # rather than fail usefully).
+  variables {
+    enable_notifications = false
+    enable_dns           = false
+    enable_https         = false
+    enable_waf           = false
+  }
+
   assert {
     condition     = var.aws_region == "us-east-1"
     error_message = "Default region should be us-east-1."
@@ -71,8 +85,15 @@ run "defaults_are_valid" {
 run "rejects_invalid_environment" {
   command = plan
 
+  # See the comment on defaults_are_valid above - an expect_failures run is
+  # doubly sensitive to this: an unexpected error appearing alongside the
+  # expected one fails the run.
   variables {
-    environment = "production"
+    environment          = "production"
+    enable_notifications = false
+    enable_dns           = false
+    enable_https         = false
+    enable_waf           = false
   }
 
   expect_failures = [
@@ -84,7 +105,11 @@ run "rejects_bad_cidr" {
   command = plan
 
   variables {
-    vpc_cidr = "not-a-cidr"
+    vpc_cidr             = "not-a-cidr"
+    enable_notifications = false
+    enable_dns           = false
+    enable_https         = false
+    enable_waf           = false
   }
 
   expect_failures = [

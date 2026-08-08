@@ -31,7 +31,15 @@ ami_id                = null # defaults to the newest Packer AMI tagged Applicat
 asg_min_size          = 2
 asg_max_size          = 4
 asg_desired_capacity  = 2
-certificate_arn       = null # set once the dns module provisions one
+
+# DNS / HTTPS / WAF (module.dns) - see modules/dns/main.tf for why these are
+# two separate flags rather than one: enable_https blocks on certificate
+# validation, which can only succeed once the domain's nameservers are
+# delegated to the zone this creates, and that delegation is a manual,
+# out-of-band step at the registrar.
+enable_dns   = false # creates the Route 53 zone, cert, and alias records (non-blocking)
+enable_https = false # additionally validates the cert and flips the ALB to HTTPS - requires enable_dns AND nameserver delegation to already be live
+enable_waf   = false # WAFv2 web ACL + ALB association
 
 tags = {
   Owner = "your-name"

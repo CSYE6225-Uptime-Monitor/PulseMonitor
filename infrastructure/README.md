@@ -11,7 +11,7 @@ Terraform for the PulseMonitor AWS deployment (region `us-east-1`, domain
 | `storage` | Implemented — `users` + `sites` DynamoDB tables, 3 S3 buckets (user-data, audit-logs, monitoring-history) |
 | `monitoring` | Implemented — pinger Lambda (`lambda/pinger/`), EventBridge 5-minute schedule, least-privilege IAM, CloudWatch log group |
 | `compute` | Implemented — ALB, target group, HTTP/HTTPS-ready listeners, launch template (Packer AMI), ASG with instance refresh, EC2 instance role |
-| `dns` | Deferred to Sprint 4-5 — Route 53, ACM, WAF. The app runs on the ALB DNS name until then. |
+| `dns` | Implemented, off by default — Route 53 zone, DNS-validated ACM cert (apex + www), alias records, SES DKIM/SPF/DMARC, optional WAFv2. Gated by `enable_dns` / `enable_https` / `enable_waf`; see [HTTPS rollout](#https-rollout) below. |
 | Alerts (SNS + CloudWatch alarms) | Deferred to Sprint 4 — lands as an additive `modules/monitoring/alerts.tf`, gated by `enable_alerts`. |
 | Notifications (per-owner down/recovery email) | Implemented, off by default — custom EventBridge bus, notifier Lambda (`lambda/notifier/`), SES domain identity. Gated by `enable_notifications`; see [Site notifications](#site-notifications) below. |
 
@@ -117,10 +117,50 @@ cd ../packer && packer init backend-ami.pkr.hcl
 packer build backend-ami.pkr.hcl
 ```
 
-HTTPS is wired but inert until `var.certificate_arn` is set (the `dns`
-module provisions it in a later sprint) - the HTTP listener forwards
-directly today and switches to a redirect once a cert is present, with no
-other changes required.
+HTTPS is wired but inert until `enable_https` is true - the HTTP listener
+forwards directly today and switches to a 301 redirect once flipped, with the
+HTTPS listener presenting the certificate `module.dns` validated. See
+[HTTPS rollout](#https-rollout) below for why this is two flags and what the
+manual step in between is.
+
+## HTTPS rollout
+
+`pulsemonitor.online` is registered at an external registrar (Namecheap), so
+Terraform can create a Route 53 hosted zone but cannot delegate the domain's
+nameservers to it - that's a manual step at the registrar. `enable_dns` and
+`enable_https` are separate flags for exactly this reason: `enable_https`
+adds `aws_acm_certificate_validation`, which *blocks* until its validation
+CNAME resolves publicly, and would otherwise hang every apply for its full
+timeout until delegation happens.
+
+1. `enable_dns = true`, apply. Creates the zone, a `PENDING_VALIDATION`
+   certificate, its validation CNAMEs, and the apex/www alias records.
+   Nothing public changes yet - the ALB still serves on its own DNS name.
+2. Read `terraform output name_servers` (4 values). At the registrar, switch
+   to Custom DNS and paste all four in.
+3. Verify from a resolver outside AWS (not by querying the AWS nameservers
+   directly, which answer correctly regardless of delegation):
+   ```bash
+   dig +short NS pulsemonitor.online @8.8.8.8   # must return the 4 awsdns hosts
+   dig +short pulsemonitor.online                # must return the ALB's IPs
+   ```
+   Namecheap propagation is usually minutes; the TLD's own NS TTL can hold up
+   to 48h. Switching to Custom DNS disables Namecheap's free email forwarding
+   and parking records. The certificate should flip to `ISSUED` on its own
+   within minutes of delegation - confirm with `aws acm describe-certificate`
+   before the next step so validation returns in seconds rather than polling.
+4. `enable_https = true`, apply. Certificate validation completes fast (the
+   cert is already issued), the HTTPS listener is created, HTTP becomes a
+   301, and `cookie_secure` flips to true - which changes the launch
+   template's user-data and triggers a rolling ASG instance refresh
+   (`min_healthy_percentage = 50`, `auto_rollback = true`). Budget ~10
+   minutes.
+
+The Route 53 zone has `prevent_destroy = true`: flipping `enable_dns` back to
+`false` or running `terraform destroy` would delete it, and recreating it
+assigns four *different* nameservers - another manual registrar edit and
+another propagation wait. Comment out the lifecycle block deliberately if
+that's ever actually intended.
 
 ## Prerequisites
 
@@ -237,7 +277,7 @@ Three workflows, split by paths filter so every directory is covered:
 ```
 test (backend, frontend, pinger, notifier)
   └─ deploy
-       ├─ assume AWS role via OIDC (no stored keys)
+       ├─ authenticate with stored AWS access keys (see below)
        ├─ decide whether the AMI needs rebuilding
        │    rebuild when backend/, frontend/, packer/ or scripts/ changed
        │    skip when only infrastructure/ or lambda/ changed
@@ -257,25 +297,27 @@ deploys are never cancelled.
 
 ### One-time setup
 
-1. Apply the bootstrap to create the GitHub OIDC provider and deploy role:
-   ```bash
-   cd infrastructure/bootstrap
-   terraform init && terraform apply
-   terraform output github_deploy_role_arn
-   ```
-2. In GitHub → *Settings → Secrets and variables → Actions → Variables*, add a
-   repository **variable** `AWS_DEPLOY_ROLE_ARN` set to that ARN. The workflow
-   fails fast with an explanatory error if it is missing, rather than
-   half-deploying.
+`deploy.yml` authenticates with long-lived AWS access keys, not OIDC: this
+GitHub org's OIDC policy blocks `AssumeRoleWithWebIdentity`, so
+`aws-actions/configure-aws-credentials` is configured with
+`secrets.AWS_ACCESS_KEY_ID` / `secrets.AWS_SECRET_ACCESS_KEY` instead of
+`role-to-assume`. Add those two repository secrets under *Settings → Secrets
+and variables → Actions → Secrets*.
 
-Only that one variable is needed — there are no AWS access keys anywhere. The
-role's trust policy is the real security boundary: it accepts only tokens whose
-`aud` is `sts.amazonaws.com` and whose `sub` is
-`repo:CSYE6225-Uptime-Monitor/PulseMonitor:ref:refs/heads/main`, so no other
-repo, branch, or fork PR can assume it. It carries `AdministratorAccess` by
-design (see the comment on `github_deploy_policy_arn`) because `terraform
-apply` creates IAM roles and `packer build` creates EC2 instances and AMIs;
-tighten it if the account is ever shared.
+The key's IAM user needs, at minimum: EC2/ASG/Auto Scaling/ELB/IAM (for
+Terraform's own resources), the S3/DynamoDB backend actions, Route 53 +
+ACM (+ WAFv2, if `enable_waf` is used - see `modules/dns/main.tf`'s header
+for exact actions, including the easy-to-miss `route53:GetChange` and
+`elasticloadbalancing:SetWebAcl`), and permission to read/create the AMI
+Packer builds. Attach these out of band (this repo doesn't manage the
+deploy user); do it *before* setting `enable_dns = true`, since a merge that
+fails mid-`CreateHostedZone` on AccessDenied leaves partial state under a
+held lock.
+
+`infrastructure/bootstrap` still defines a GitHub OIDC provider + deploy role
+(`aws_iam_openid_connect_provider`, `aws_iam_role.github_deploy`), gated by
+`enable_github_oidc`. It is dormant - nothing in `deploy.yml` assumes it -
+kept in case the org policy changes and OIDC becomes usable again.
 
 ### Environment configuration
 
@@ -288,8 +330,10 @@ terraform apply -var-file=environments/dev.tfvars
 
 It is deliberately not named `terraform.tfvars`, for two reasons. A gitignored
 `terraform.tfvars` would leave CI applying variable *defaults* — and
-`enable_notifications` defaults to `false`, so the first automated deploy would
-destroy the whole notification stack. It is also auto-loaded by `terraform
-test`, which leaks its values into module-level test runs. Nothing secret lives
-in it: the session secret is generated by `random_password` into SSM, and AWS
-credentials come from OIDC.
+`enable_notifications` (and now `enable_dns` / `enable_https` / `enable_waf`)
+default to `false`, so the first automated deploy would destroy the whole
+notification and DNS stack. It is also auto-loaded by `terraform test`, which
+leaks its values into module-level test runs. Nothing secret lives in it: the
+session secret is generated by `random_password` into SSM, and AWS credentials
+come from the two access-key secrets described in
+[One-time setup](#one-time-setup) above.

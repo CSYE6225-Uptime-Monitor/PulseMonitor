@@ -256,16 +256,18 @@ resource "aws_lb_target_group" "app" {
   tags = { Name = "${local.name_prefix}-tg" }
 }
 
-# HTTP listener: forwards directly while certificate_arn is null (today),
-# and redirects to HTTPS once a cert is wired in from the dns module -
-# a one-variable change, not a restructure.
+# HTTP listener: forwards directly while enable_https is false (today), and
+# redirects to HTTPS once flipped - a one-variable change, not a restructure.
+# Gated on enable_https, NOT on certificate_arn == null: count/for_each must
+# be known at plan time, and certificate_arn is unknown on the very apply
+# that first creates+validates the certificate in modules/dns.
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.this.arn
   port              = 80
   protocol          = "HTTP"
 
   dynamic "default_action" {
-    for_each = var.certificate_arn == null ? [1] : []
+    for_each = var.enable_https ? [] : [1]
     content {
       type             = "forward"
       target_group_arn = aws_lb_target_group.app.arn
@@ -273,7 +275,7 @@ resource "aws_lb_listener" "http" {
   }
 
   dynamic "default_action" {
-    for_each = var.certificate_arn == null ? [] : [1]
+    for_each = var.enable_https ? [1] : []
     content {
       type = "redirect"
       redirect {
@@ -286,7 +288,8 @@ resource "aws_lb_listener" "http" {
 }
 
 resource "aws_lb_listener" "https" {
-  count             = var.certificate_arn == null ? 0 : 1
+  count = var.enable_https ? 1 : 0
+
   load_balancer_arn = aws_lb.this.arn
   port              = 443
   protocol          = "HTTPS"
@@ -296,6 +299,13 @@ resource "aws_lb_listener" "https" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.arn
+  }
+
+  lifecycle {
+    precondition {
+      condition     = var.certificate_arn != null
+      error_message = "enable_https requires a validated certificate_arn."
+    }
   }
 }
 

@@ -7,8 +7,11 @@ name: deploy
 # auto_rollback) is what turns a new AMI into a zero-downtime rollout, so
 # this workflow only has to produce the AMI and apply - AWS does the rest.
 #
-# Auth is OIDC: no long-lived AWS keys live in GitHub. The role is created by
-# infrastructure/bootstrap and trusts only this repo's main branch.
+# Auth is long-lived AWS access keys (secrets.AWS_ACCESS_KEY_ID /
+# AWS_SECRET_ACCESS_KEY): this GitHub org's OIDC policy blocks
+# AssumeRoleWithWebIdentity, so the OIDC role infrastructure/bootstrap can
+# create (gated by enable_github_oidc) sits unused. See infrastructure/
+# README.md's "One-time setup" section for the IAM permissions the key needs.
 
 on:
   push:
@@ -73,6 +76,11 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
+    # Default is 360m. A stuck aws_acm_certificate_validation (bounded to 10m
+    # by its own resource timeout, but that's per-apply, not per-job) stacked
+    # on a stuck Packer build could otherwise eat most of a day of the
+    # deploy-dev concurrency group, which never cancels in-progress runs.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -192,16 +200,63 @@ jobs:
         working-directory: infrastructure
         run: terraform apply -input=false -lock-timeout=5m deploy.tfplan
 
+      # Blocking: the ALB's own DNS name resolves from the moment the ALB
+      # exists, independent of Route 53 and of the registrar's nameserver
+      # delegation. A non-200 here means the deploy itself is broken, not
+      # that DNS is mid-rollout, so this should fail the job.
+      - name: Smoke test the ALB
+        working-directory: infrastructure
+        run: |
+          set -euo pipefail
+          ALB="$(terraform output -raw alb_dns_name)"
+          for i in $(seq 1 30); do
+            CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "http://${ALB}/healthz" || echo 000)"
+            echo "attempt ${i}: ${CODE}"
+            [ "$CODE" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "::error::ALB /healthz never returned 200"
+          exit 1
+
+      # Advisory: pulsemonitor.online only resolves once its nameservers have
+      # been pasted into the registrar's Custom DNS settings by hand - a step
+      # Terraform cannot perform and this job cannot wait for. continue-on-error
+      # so the pre-delegation window (which can last hours) reports amber in
+      # the summary instead of failing every merge to main until it's done.
+      - name: Smoke test the public domain (advisory)
+        id: domain_smoke
+        if: always()
+        continue-on-error: true
+        working-directory: infrastructure
+        env:
+          DOMAIN: pulsemonitor.online
+        run: |
+          set -uo pipefail
+          if ! host "$DOMAIN" >/dev/null 2>&1; then
+            echo "result=not-delegated" >> "$GITHUB_OUTPUT"
+            echo "::notice::${DOMAIN} does not resolve yet - nameservers not yet updated at the registrar."
+            exit 0
+          fi
+          CODE="$(curl -sSL -o /dev/null -w '%{http_code}' --max-time 15 "https://${DOMAIN}/healthz" || echo 000)"
+          echo "result=${CODE}" >> "$GITHUB_OUTPUT"
+          if [ "$CODE" != "200" ]; then
+            echo "::warning::https://${DOMAIN}/healthz returned ${CODE}"
+          fi
+
       - name: Summarise
         if: always()
         working-directory: infrastructure
         env:
           REBUILD: ${{ steps.ami_needed.outputs.rebuild }}
           REASON: ${{ steps.ami_needed.outputs.reason }}
+          DOMAIN_RESULT: ${{ steps.domain_smoke.outputs.result }}
         run: |
           {
             echo "### PulseMonitor deploy"
             echo ""
             echo "- AMI rebuilt: \`${REBUILD}\` (${REASON})"
             echo "- App URL: $(terraform output -raw app_url 2>/dev/null || echo 'n/a')"
+            echo "- Domain check (\`pulsemonitor.online\`): \`${DOMAIN_RESULT:-n/a}\`"
+            echo "- Route 53 nameservers (paste into the registrar's Custom DNS settings):"
+            terraform output -json name_servers 2>/dev/null | jq -r '. // [] | .[] | "  - `\(.)`"' || echo "  - n/a"
           } >> "$GITHUB_STEP_SUMMARY"
