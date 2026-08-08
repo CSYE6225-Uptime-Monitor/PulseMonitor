@@ -26,6 +26,7 @@ export default function AccountPage() {
 
 function AccountForm({ user, onLogout }: { user: User; onLogout: () => Promise<void> }) {
   const router = useRouter();
+  const { updateUser } = useAuth();
   const [form, setForm] = useState({ first_name: user.first_name, last_name: user.last_name });
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -37,7 +38,11 @@ function AccountForm({ user, onLogout }: { user: User; onLogout: () => Promise<v
     setMessage(null);
     setSubmitting(true);
     try {
-      await updateSelf(form);
+      const updated = await updateSelf(form);
+      // Without this, AuthContext.user keeps whatever was fetched at mount -
+      // the dashboard greeting and any other consumer stays stale until a
+      // full page reload, even though the update itself succeeded.
+      updateUser(updated);
       setMessage("Account updated.");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
@@ -47,7 +52,13 @@ function AccountForm({ user, onLogout }: { user: User; onLogout: () => Promise<v
   }
 
   async function handleLogout() {
-    await onLogout();
+    // See the dashboard's handleLogout: onLogout() rethrows after clearing
+    // local state, so swallow it here and redirect unconditionally.
+    try {
+      await onLogout();
+    } catch {
+      // Nothing actionable to show - the local session is cleared either way.
+    }
     router.push("/login");
   }
 

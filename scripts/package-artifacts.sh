@@ -16,8 +16,13 @@
 # Run from anywhere:  ./scripts/package-artifacts.sh
 # Then:               cd packer && packer build -var="subnet_id=..." backend-ami.pkr.hcl
 #
-# NOTE: this installs backend/ and lambda/*/ with --omit=dev, which removes
-# jest. Run unit tests BEFORE this, or re-run a plain `npm ci` afterwards.
+# NOTE: this installs backend/ with --omit=dev, which removes jest. Run unit
+# tests BEFORE this, or re-run a plain `npm ci` afterwards.
+#
+# Does NOT install lambda/*/ - deploy.yml's "Install {pinger,notifier}
+# production dependencies" steps do that unconditionally on every deploy,
+# since data.archive_file.pinger and .notifier zip those directories on every
+# terraform apply regardless of whether this AMI-packaging script ran.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -35,12 +40,9 @@ for required in frontend/.next/standalone frontend/.next/static frontend/public;
   [[ -d "$required" ]] || { echo "FATAL: expected $required after the build" >&2; exit 1; }
 done
 
-echo "==> Backend and Lambdas: production-only installs"
-# These ship node_modules as-is onto the AMI / into the Lambda zip, so dev
-# dependencies must not be present.
+echo "==> Backend: production-only install"
+# Ships node_modules as-is onto the AMI, so dev dependencies must not be present.
 (cd backend && npm ci --omit=dev)
-(cd lambda/pinger && npm ci --omit=dev)
-(cd lambda/notifier && npm ci --omit=dev)
 
 echo "==> Packaging"
 rm -rf "$build_dir"
