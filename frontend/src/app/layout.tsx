@@ -14,13 +14,39 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PulseMonitor",
-  description: "Uptime monitoring for your sites, with email alerts when they go down.",
+  title: {
+    default: "PulseMonitor",
+    template: "%s · PulseMonitor",
+  },
+  description:
+    "Real-time uptime monitoring for your websites and APIs. Get instant email alerts the moment something goes down.",
+  keywords: ["uptime monitoring", "website monitoring", "downtime alerts", "status page", "ping monitor"],
+  authors: [{ name: "PulseMonitor" }],
+  creator: "PulseMonitor",
+  metadataBase: new URL("https://pulsemonitor.app"),
+  openGraph: {
+    type: "website",
+    siteName: "PulseMonitor",
+    title: "PulseMonitor — Know the moment your site goes down",
+    description:
+      "Real-time uptime monitoring for your websites and APIs. Get instant email alerts the moment something goes down.",
+    url: "https://pulsemonitor.app",
+  },
+  twitter: {
+    card: "summary",
+    title: "PulseMonitor — Know the moment your site goes down",
+    description:
+      "Real-time uptime monitoring for your websites and APIs. Get instant email alerts the moment something goes down.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export const viewport: Viewport = {
   colorScheme: "light",
-  themeColor: "#ffffff",
+  themeColor: "#2563eb",
 };
 
 export default function RootLayout({
