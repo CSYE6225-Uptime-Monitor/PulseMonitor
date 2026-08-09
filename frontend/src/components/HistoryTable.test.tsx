@@ -70,6 +70,6 @@ describe("HistoryTable", () => {
   it("disables the Load more button while a page is already loading", () => {
     render(<HistoryTable records={[upRecord]} nextCursor="opaque-cursor" onLoadMore={vi.fn()} loadingMore />);
 
-    expect(screen.getByRole("button", { name: "Loading..." })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Loading…" })).toBeDisabled();
   });
 });
