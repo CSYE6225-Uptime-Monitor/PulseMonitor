@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { ApiError } from "@/lib/api";
-import { ALLOWED_FREQUENCIES, type CreateSiteInput, type UpdateSiteInput } from "@/lib/sites";
+import { ALLOWED_FREQUENCIES, formatFrequency, type CreateSiteInput, type UpdateSiteInput } from "@/lib/sites";
 import { Alert, Button, Checkbox, Field, Input, Select } from "@/components/ui";
 
 export interface SiteFormValues {
@@ -71,7 +71,13 @@ export function SiteForm(props: SiteFormProps) {
         await props.onSubmit(payload);
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : props.mode === "create"
+            ? "Couldn't add this site. Please try again."
+            : "Couldn't save changes. Please try again."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -100,7 +106,7 @@ export function SiteForm(props: SiteFormProps) {
         />
       </Field>
 
-      <Field htmlFor="site-frequency" label="Check frequency (minutes)">
+      <Field htmlFor="site-frequency" label="Check frequency">
         <Select
           id="site-frequency"
           value={String(values.check_frequency_minutes)}
@@ -108,7 +114,7 @@ export function SiteForm(props: SiteFormProps) {
         >
           {ALLOWED_FREQUENCIES.map((minutes) => (
             <option key={minutes} value={minutes}>
-              {minutes}
+              {formatFrequency(minutes)}
             </option>
           ))}
         </Select>

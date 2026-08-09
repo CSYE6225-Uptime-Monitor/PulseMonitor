@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, memo } from "react";
 import Link from "next/link";
 import type { Site } from "@/lib/sites";
 import type { SiteUptimeEntry } from "@/lib/useSiteHistories";
@@ -19,7 +19,7 @@ export interface SiteCardProps {
   history: SiteUptimeEntry | undefined;
 }
 
-export function SiteCard({ site, history }: SiteCardProps) {
+const SiteCardInner = function SiteCard({ site, history }: SiteCardProps) {
   const [detailsOpenOverride, setDetailsOpenOverride] = useState<boolean | null>(null);
   const hasIncident = site.status.status === "down";
   const detailsOpen = detailsOpenOverride ?? hasIncident;
@@ -33,8 +33,8 @@ export function SiteCard({ site, history }: SiteCardProps) {
     : null;
 
   return (
-    <Card interactive>
-      <CardBody className="space-y-4">
+    <Card interactive className="flex h-full flex-col">
+      <CardBody className="flex-1 space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <Link
@@ -51,11 +51,10 @@ export function SiteCard({ site, history }: SiteCardProps) {
         </div>
 
         <div className="flex items-center justify-between gap-3 text-sm">
-          <span className="font-medium text-ink-muted">Uptime</span>
+          <span className="text-ink-subtle">Uptime</span>
           <div className="flex items-center gap-3">
-            <span className="text-ink-subtle">
+            <span className="font-medium text-ink-muted">
               {uptime ? formatUptimePercent(uptime.percent) : "No data yet"}
-              {uptime && uptime.percent !== null && (hasIncident ? " – Current issues" : " – No current issues")}
             </span>
             {hasIncident && (
               <button
@@ -63,7 +62,7 @@ export function SiteCard({ site, history }: SiteCardProps) {
                 aria-expanded={detailsOpen}
                 aria-controls={panelId}
                 onClick={() => setDetailsOpenOverride(!detailsOpen)}
-                className="focus-ring rounded-xs text-sm font-medium text-accent hover:text-accent-hover"
+                className="focus-ring rounded-xs py-2 -my-2 text-sm font-medium text-accent hover:text-accent-hover"
               >
                 {detailsOpen ? "Hide details" : "Show details"}
               </button>
@@ -74,7 +73,7 @@ export function SiteCard({ site, history }: SiteCardProps) {
         {hasIncident && detailsOpen && <IncidentPanel id={panelId} status={site.status} />}
 
         {history?.error ? (
-          <p className="text-xs text-ink-faint">Uptime history unavailable</p>
+          <p className="text-xs text-ink-subtle">Couldn&apos;t load uptime history</p>
         ) : uptime ? (
           <UptimeBar
             buckets={uptime.buckets}
@@ -104,4 +103,6 @@ export function SiteCard({ site, history }: SiteCardProps) {
       </div>
     </Card>
   );
-}
+};
+
+export const SiteCard = memo(SiteCardInner);

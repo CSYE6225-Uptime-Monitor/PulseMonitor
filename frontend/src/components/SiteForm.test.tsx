@@ -18,7 +18,7 @@ describe("SiteForm", () => {
 
       expect(screen.getByLabelText("URL")).toHaveValue("");
       expect(screen.getByLabelText("Name")).toHaveValue("");
-      expect(screen.getByLabelText("Check frequency (minutes)")).toHaveValue("5");
+      expect(screen.getByLabelText("Check frequency")).toHaveValue("5");
       expect(screen.getByLabelText("Enabled")).toBeChecked();
     });
 
@@ -58,7 +58,7 @@ describe("SiteForm", () => {
 
       expect(screen.getByLabelText("URL")).toHaveValue("https://example.com");
       expect(screen.getByLabelText("Name")).toHaveValue("Example");
-      expect(screen.getByLabelText("Check frequency (minutes)")).toHaveValue("10");
+      expect(screen.getByLabelText("Check frequency")).toHaveValue("10");
       expect(screen.getByLabelText("Enabled")).toBeChecked();
     });
 

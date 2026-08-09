@@ -33,28 +33,29 @@ export default function LoginPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <h1 className="text-lg font-semibold text-ink">Log in</h1>
-          <p className="mt-1 text-sm text-ink-subtle">Welcome back.</p>
         </div>
 
         {error && <Alert tone="error">{error}</Alert>}
 
-        <Field htmlFor="email" label="Email">
+        <Field htmlFor="email" label="Email" required>
           <Input
             id="email"
             name="email"
             type="email"
             required
+            autoComplete="email"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
         </Field>
 
-        <Field htmlFor="password" label="Password">
+        <Field htmlFor="password" label="Password" required>
           <Input
             id="password"
             name="password"
             type="password"
             required
+            autoComplete="current-password"
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
           />

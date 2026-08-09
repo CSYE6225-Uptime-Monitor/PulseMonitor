@@ -27,20 +27,19 @@ export default function AccountPage() {
       <Card padding="none">
         <Link
           href="/account/activity"
-          aria-label="Account activity"
           className="focus-ring flex items-center justify-between gap-3 px-6 py-4 transition-colors hover:bg-surface-subtle"
         >
           <span>
-            <span aria-hidden="true" className="block text-sm font-medium text-ink">
+            <span className="block text-sm font-medium text-ink">
               Account activity
             </span>
-            <span aria-hidden="true" className="mt-0.5 block text-xs text-ink-subtle">
+            <span className="mt-0.5 block text-xs text-ink-subtle">
               View recent sign-ins and changes.
             </span>
           </span>
-          <span aria-hidden="true" className="text-ink-faint">
-            →
-          </span>
+          <svg aria-hidden="true" viewBox="0 0 20 20" className="size-4 shrink-0 text-ink-faint">
+            <path d="M8 6l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </Link>
       </Card>
     </div>
@@ -67,7 +66,7 @@ function AccountForm({ user }: { user: User }) {
       updateUser(updated);
       setMessage("Account updated.");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      setError(err instanceof ApiError ? err.message : "Couldn't save your changes. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -78,11 +77,9 @@ function AccountForm({ user }: { user: User }) {
       <CardHeader title="Profile" />
       <form onSubmit={handleUpdate}>
         <CardBody className="space-y-4">
-          <div className="flex items-center justify-between border-b border-hairline pb-4">
-            <div>
-              <p className="text-sm font-medium text-ink">{user.email}</p>
-              <p className="text-xs text-ink-subtle">Email can&apos;t be changed.</p>
-            </div>
+          <div className="border-b border-hairline pb-4">
+            <p className="text-sm font-medium text-ink">{user.email}</p>
+            <p className="text-xs text-ink-subtle">Email can&apos;t be changed.</p>
           </div>
 
           {error && <Alert tone="error">{error}</Alert>}

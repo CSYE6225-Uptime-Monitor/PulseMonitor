@@ -6,6 +6,7 @@ import { useRequireAuth } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 import {
   deleteSite,
+  formatFrequency,
   getSite,
   getSiteHistory,
   getSiteStatus,
@@ -43,12 +44,6 @@ interface HistoryWindow {
   spanMs: number;
 }
 
-function formatFrequency(minutes: number): string {
-  if (minutes < 60) return `Every ${minutes} minutes`;
-  if (minutes === 60) return "Every hour";
-  if (minutes < 1440) return `Every ${minutes / 60} hours`;
-  return "Once a day";
-}
 
 export default function SiteDetailPage() {
   const { user, loading: authLoading } = useRequireAuth();
@@ -68,6 +63,7 @@ export default function SiteDetailPage() {
   const [historyError, setHistoryError] = useState<string | null>(null);
 
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [detailsOpenOverride, setDetailsOpenOverride] = useState<boolean | null>(null);
 
   // Read inside the status-poll interval below without making that effect
@@ -94,7 +90,7 @@ export default function SiteDetailPage() {
       } catch (err) {
         // Without this catch, a rejected fetch here escaped as an unhandled
         // promise rejection - records simply stayed [] with no visible error.
-        setHistoryError(err instanceof ApiError ? err.message : "Failed to load history.");
+        setHistoryError(err instanceof ApiError ? err.message : "Couldn't load check history.");
       } finally {
         setHistoryLoading(false);
       }
@@ -155,7 +151,7 @@ export default function SiteDetailPage() {
         if (err instanceof ApiError && err.status === 404) {
           setNotFound(true);
         } else {
-          setError(err instanceof ApiError ? err.message : "Failed to load site.");
+          setError(err instanceof ApiError ? err.message : "Couldn't load this site.");
         }
       } finally {
         if (!cancelled) setSiteLoading(false);
@@ -222,17 +218,19 @@ export default function SiteDetailPage() {
 
   if (siteLoading) {
     return (
-      <div className="mx-auto w-full max-w-4xl space-y-6">
+      <div className="mx-auto w-full max-w-4xl space-y-8">
         <Skeleton className="h-8 w-48" />
-        <Card padding="md">
-          <UptimeBarSkeleton />
-        </Card>
-        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-hairline bg-hairline sm:grid-cols-4">
+        <div className="space-y-3">
+          <Card padding="md">
+            <UptimeBarSkeleton />
+          </Card>
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-hairline bg-hairline sm:grid-cols-4">
           {Array.from({ length: 4 }, (_, i) => (
             <div key={i} className="bg-surface p-4">
               <Skeleton className="h-8 w-full" />
             </div>
           ))}
+          </div>
         </div>
       </div>
     );
@@ -243,7 +241,8 @@ export default function SiteDetailPage() {
       <div className="mx-auto w-full max-w-4xl">
         <Card padding="none">
           <EmptyState
-            title="That site doesn't exist, or it's no longer in your account."
+            title="Site not found"
+            description="This site doesn't exist in your account."
             action={<TextLink href="/dashboard">Back to dashboard</TextLink>}
           />
         </Card>
@@ -265,14 +264,16 @@ export default function SiteDetailPage() {
   }
 
   async function handleDelete() {
-    if (!site || !window.confirm(`Delete ${site.name}? This cannot be undone.`)) {
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
       return;
     }
+    setConfirmingDelete(false);
     try {
       await deleteSite(siteId);
       router.push("/dashboard");
     } catch (err) {
-      setDeleteError(err instanceof ApiError ? err.message : "Failed to delete site.");
+      setDeleteError(err instanceof ApiError ? err.message : "Couldn't delete this site. Try again.");
     }
   }
 
@@ -287,12 +288,12 @@ export default function SiteDetailPage() {
   const detailsOpen = detailsOpenOverride ?? hasIncident;
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6">
-      <TextLink href="/dashboard" className="inline-flex items-center gap-1.5 text-ink-subtle hover:text-accent">
-        ← Back to dashboard
-      </TextLink>
+    <div className="mx-auto w-full max-w-4xl space-y-8">
+      <div className="space-y-1">
+        <TextLink href="/dashboard" className="inline-flex items-center gap-1.5 py-2 -my-2 text-ink-subtle hover:text-accent">
+          ← Back to dashboard
+        </TextLink>
 
-      <div>
         <PageHeader
           title={site.name}
           description={
@@ -310,10 +311,11 @@ export default function SiteDetailPage() {
         />
       </div>
 
-      <Card padding="none">
+      <div className="space-y-3">
+        <Card padding="none">
         <CardHeader
           title="Uptime"
-          description={uptime ? uptime.windowLabel : undefined}
+          description={uptime ? `${formatUptimePercent(uptime.percent)} · ${uptime.windowLabel}` : undefined}
           actions={
             hasIncident && (
               <button
@@ -321,7 +323,7 @@ export default function SiteDetailPage() {
                 aria-expanded={detailsOpen}
                 aria-controls="incident-panel"
                 onClick={() => setDetailsOpenOverride(!detailsOpen)}
-                className="focus-ring inline-flex items-center gap-1 rounded-xs text-sm font-medium text-accent hover:text-accent-hover"
+                className="focus-ring inline-flex items-center gap-1 rounded-xs py-2 -my-2 text-sm font-medium text-accent hover:text-accent-hover"
               >
                 {detailsOpen ? "Hide details" : "Show details"}
               </button>
@@ -329,14 +331,6 @@ export default function SiteDetailPage() {
           }
         />
         <CardBody className="space-y-4">
-          <div className="flex items-center justify-between text-sm">
-            <span className="font-medium text-ink-muted">Uptime</span>
-            <span className="text-ink-subtle">
-              {uptime ? formatUptimePercent(uptime.percent) : "No data yet"}
-              {uptime && uptime.percent !== null && (hasIncident ? " – Current issues" : " – No current issues")}
-            </span>
-          </div>
-
           {hasIncident && detailsOpen && <IncidentPanel id="incident-panel" status={site.status} />}
 
           {uptime ? (
@@ -356,19 +350,19 @@ export default function SiteDetailPage() {
 
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-hairline bg-hairline sm:grid-cols-4">
         <div className="bg-surface p-4">
-          <p className="text-xs uppercase tracking-wide text-ink-faint">Last checked</p>
+          <p className="text-xs text-ink-subtle">Last checked</p>
           <p className="mt-1 text-sm font-medium text-ink">
             {site.status.checked_at ? new Date(site.status.checked_at).toLocaleString() : "Never checked"}
           </p>
         </div>
         <div className="bg-surface p-4">
-          <p className="text-xs uppercase tracking-wide text-ink-faint">Response time</p>
+          <p className="text-xs text-ink-subtle">Response time</p>
           <p className="mt-1 text-sm font-medium tabular-nums text-ink">
             {site.status.latency_ms !== null ? `${site.status.latency_ms} ms` : "—"}
           </p>
         </div>
         <div className="bg-surface p-4">
-          <p className="text-xs uppercase tracking-wide text-ink-faint">Status code</p>
+          <p className="text-xs text-ink-subtle">Status code</p>
           <p
             className={`mt-1 text-sm font-medium tabular-nums ${
               site.status.status_code && site.status.status_code >= 400 ? "text-down" : "text-ink"
@@ -378,10 +372,26 @@ export default function SiteDetailPage() {
           </p>
         </div>
         <div className="bg-surface p-4">
-          <p className="text-xs uppercase tracking-wide text-ink-faint">Check frequency</p>
+          <p className="text-xs text-ink-subtle">Check frequency</p>
           <p className="mt-1 text-sm font-medium text-ink">{formatFrequency(site.check_frequency_minutes)}</p>
         </div>
       </div>
+      </div>
+
+      <Card padding="none">
+        <CardHeader title="Check history" />
+        {historyError && (
+          <div className="px-6 pt-4">
+            <Alert tone="error">{historyError}</Alert>
+          </div>
+        )}
+        <HistoryTable
+          records={[...records].reverse()}
+          nextCursor={nextCursor}
+          onLoadMore={() => historyWindow && nextCursor && loadHistory(historyWindow, nextCursor)}
+          loadingMore={historyLoading}
+        />
+      </Card>
 
       <Card padding="none">
         <CardHeader title="Settings" />
@@ -401,25 +411,21 @@ export default function SiteDetailPage() {
             Deleting removes this site and all of its check history. This cannot be undone.
           </p>
           {deleteError && <Alert tone="error">{deleteError}</Alert>}
-          <Button type="button" variant="danger" onClick={handleDelete}>
-            Delete site
-          </Button>
+          {confirmingDelete ? (
+            <div className="flex items-center gap-3">
+              <Button type="button" variant="danger" onClick={handleDelete}>
+                Confirm deletion
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setConfirmingDelete(false)}>
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <Button type="button" variant="danger" onClick={handleDelete}>
+              Delete site
+            </Button>
+          )}
         </CardBody>
-      </Card>
-
-      <Card padding="none">
-        <CardHeader title="Check history" />
-        {historyError && (
-          <div className="px-6 pt-4">
-            <Alert tone="error">{historyError}</Alert>
-          </div>
-        )}
-        <HistoryTable
-          records={[...records].reverse()}
-          nextCursor={nextCursor}
-          onLoadMore={() => historyWindow && nextCursor && loadHistory(historyWindow, nextCursor)}
-          loadingMore={historyLoading}
-        />
       </Card>
     </div>
   );
