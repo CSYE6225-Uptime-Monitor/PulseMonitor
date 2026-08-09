@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 /** How long past the scheduled check time we still show "any moment now". */
 export const GRACE_PERIOD_MS = 2 * 60_000;
@@ -36,24 +36,32 @@ export function useNextCheck(
   frequencyMinutes: number,
   enabled: boolean
 ): string | null {
-  const [label, setLabel] = useState<string | null>(null);
+  // The clock is an external, mutable source, so we read it through
+  // useSyncExternalStore: subscribe drives a 1s re-render, and getSnapshot
+  // reads Date.now() (an impure read that only belongs outside render).
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      if (!enabled || !checkedAt) {
+        return () => {};
+      }
+      const id = setInterval(onChange, 1000);
+      return () => clearInterval(id);
+    },
+    // frequencyMinutes only affects the computed value (getSnapshot), not the
+    // 1s tick cadence, so it deliberately isn't a subscribe dependency.
+    [checkedAt, enabled]
+  );
 
-  useEffect(() => {
+  const getSnapshot = useCallback(() => {
     if (!enabled || !checkedAt) {
-      setLabel(null);
-      return;
+      return null;
     }
-
     const nextMs = Date.parse(checkedAt) + frequencyMinutes * 60_000;
-
-    function tick() {
-      setLabel(formatNextCheckLabel(nextMs - Date.now()));
-    }
-
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
+    return formatNextCheckLabel(nextMs - Date.now());
   }, [checkedAt, frequencyMinutes, enabled]);
 
-  return label;
+  // On the server there is no live clock; render nothing until hydration.
+  const getServerSnapshot = () => null;
+
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }

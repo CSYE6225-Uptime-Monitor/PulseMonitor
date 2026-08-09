@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, useState } from "react";
+import { memo, useState } from "react";
 import Link from "next/link";
 import type { Site } from "@/lib/sites";
 import type { SiteUptimeEntry } from "@/lib/useSiteHistories";
@@ -27,19 +27,15 @@ const SiteCardInner = function SiteCard({ site, history }: SiteCardProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const hasIncident = site.status.status === "down";
 
-  const uptime = useMemo(
-    () =>
-      history?.window
-        ? buildUptimeView(history.window, {
-            checkIntervalMinutes: site.check_frequency_minutes,
-            monitoredSinceMs: Date.parse(site.created_at),
-          })
-        : null,
-    // history.window is a stable reference until checked_at changes (useSiteHistories cache key),
-    // so this only recomputes when new history actually arrives, not on every status poll.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [history?.window, site.check_frequency_minutes, site.created_at]
-  );
+  // React Compiler memoizes this automatically, keyed on history.window,
+  // site.check_frequency_minutes, and site.created_at — so it only recomputes
+  // when new history actually arrives, not on every status poll.
+  const uptime = history?.window
+    ? buildUptimeView(history.window, {
+        checkIntervalMinutes: site.check_frequency_minutes,
+        monitoredSinceMs: Date.parse(site.created_at),
+      })
+    : null;
 
   return (
     <Card interactive className="flex h-full flex-col">
