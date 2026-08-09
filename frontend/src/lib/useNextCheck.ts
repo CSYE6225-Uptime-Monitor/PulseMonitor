@@ -6,7 +6,7 @@ import { useCallback, useSyncExternalStore } from "react";
 export const GRACE_PERIOD_MS = 2 * 60_000;
 
 /**
- * Pure formatter — exported for unit testing.
+ * Pure formatter - exported for unit testing.
  * Returns a countdown string, "any moment now" within the grace window,
  * or null once the check is overdue beyond the grace period.
  */

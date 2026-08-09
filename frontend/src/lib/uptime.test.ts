@@ -48,6 +48,26 @@ describe("pickHistoryWindow", () => {
     expect(toMs).toBe(now);
     expect(fromMs).toBe(now - spanMs);
   });
+
+  it("widens the window to include the last check when it falls outside the frequency-based span", () => {
+    // 5-minute frequency normally yields an 8h window, but the last real
+    // check was 11h ago - the window should widen to cover it instead of
+    // reporting "no data" for a site that actually has history.
+    const lastCheckedAtMs = now - 11 * HOUR;
+    const { spanMs, fromMs } = pickHistoryWindow(5, now, lastCheckedAtMs);
+    expect(spanMs).toBe(11 * HOUR);
+    expect(fromMs).toBe(lastCheckedAtMs);
+  });
+
+  it("still caps the widened window at 24 hours", () => {
+    const lastCheckedAtMs = now - 30 * HOUR;
+    expect(pickHistoryWindow(5, now, lastCheckedAtMs).spanMs).toBe(24 * HOUR);
+  });
+
+  it("leaves the frequency-based span untouched when the last check is recent", () => {
+    const lastCheckedAtMs = now - 1 * MIN;
+    expect(pickHistoryWindow(5, now, lastCheckedAtMs).spanMs).toBe(96 * 5 * MIN);
+  });
 });
 
 describe("buildUptimeBuckets", () => {

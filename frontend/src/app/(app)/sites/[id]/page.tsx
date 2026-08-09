@@ -25,6 +25,7 @@ import { UptimeBar, UptimeBarSkeleton } from "@/components/UptimeBar";
 import { IncidentPanel } from "@/components/IncidentPanel";
 import {
   Alert,
+  BackLink,
   Card,
   CardBody,
   CardHeader,
@@ -105,8 +106,8 @@ export default function SiteDetailPage() {
   // has moved - any extra pages a user loaded are for a window that no
   // longer applies.
   const refreshHistoryWindow = useCallback(
-    async (checkFrequencyMinutes: number) => {
-      const window = pickHistoryWindow(checkFrequencyMinutes);
+    async (checkFrequencyMinutes: number, lastCheckedAtMs?: number | null) => {
+      const window = pickHistoryWindow(checkFrequencyMinutes, Date.now(), lastCheckedAtMs);
       setHistoryWindow(window);
       try {
         const page = await getSiteHistory(siteId, {
@@ -141,7 +142,11 @@ export default function SiteDetailPage() {
         // 5-minute site needs a much narrower window than a daily one to
         // fit within the API's 100-record page cap), so it can only be
         // computed once the site itself has loaded.
-        const window = pickHistoryWindow(result.check_frequency_minutes);
+        const window = pickHistoryWindow(
+          result.check_frequency_minutes,
+          Date.now(),
+          result.status.checked_at ? Date.parse(result.status.checked_at) : null
+        );
         setHistoryWindow(window);
         await loadHistory(window);
       } catch (err) {
@@ -190,7 +195,10 @@ export default function SiteDetailPage() {
         );
 
         if (siteRef.current) {
-          await refreshHistoryWindow(siteRef.current.check_frequency_minutes);
+          await refreshHistoryWindow(
+            siteRef.current.check_frequency_minutes,
+            latest.checked_at ? Date.parse(latest.checked_at) : null
+          );
         }
       } catch {
         // Best-effort background refresh - a transient poll failure shouldn't
@@ -291,22 +299,7 @@ export default function SiteDetailPage() {
   return (
     <div className="mx-auto w-full max-w-4xl space-y-8">
       <div className="space-y-1">
-        <Link
-          href="/dashboard"
-          className="focus-ring group inline-flex items-center gap-2 rounded-xs py-1 -my-1 font-mono text-xs uppercase tracking-widest text-ink-subtle transition-colors hover:text-ink"
-        >
-          <svg
-            aria-hidden="true"
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            className="transition-transform group-hover:-translate-x-0.5"
-          >
-            <path d="M7.5 2L3.5 6L7.5 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Dashboard
-        </Link>
+        <BackLink href="/dashboard">Dashboard</BackLink>
 
         <PageHeader
           title={site.name}

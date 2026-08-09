@@ -27,14 +27,14 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     siteName: "PulseMonitor",
-    title: "PulseMonitor — Know the moment your site goes down",
+    title: "PulseMonitor - Know the moment your site goes down",
     description:
       "Real-time uptime monitoring for your websites and APIs. Get instant email alerts the moment something goes down.",
     url: "https://pulsemonitor.app",
   },
   twitter: {
     card: "summary",
-    title: "PulseMonitor — Know the moment your site goes down",
+    title: "PulseMonitor - Know the moment your site goes down",
     description:
       "Real-time uptime monitoring for your websites and APIs. Get instant email alerts the moment something goes down.",
   },

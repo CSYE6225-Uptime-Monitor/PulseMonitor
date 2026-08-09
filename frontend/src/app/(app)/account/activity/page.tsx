@@ -3,7 +3,7 @@
 import { useRequireAuth } from "@/lib/auth";
 import { useActivity } from "@/lib/useActivity";
 import { ActivityTable } from "@/components/ActivityTable";
-import { Alert, Card, PageHeader, TextLink } from "@/components/ui";
+import { Alert, BackLink, Card, PageHeader } from "@/components/ui";
 
 export default function AccountActivityPage() {
   const { user, loading: authLoading } = useRequireAuth();
@@ -17,9 +17,7 @@ export default function AccountActivityPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6">
-      <TextLink href="/account" className="inline-flex items-center gap-1.5 text-ink-subtle hover:text-accent">
-        ← Back to account
-      </TextLink>
+      <BackLink href="/account">Back to account</BackLink>
 
       <PageHeader
         title="Account activity"

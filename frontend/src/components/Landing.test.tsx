@@ -27,11 +27,10 @@ describe("Landing component", () => {
     expect(link).toHaveTextContent(/log in/i);
   });
 
-  it("renders a Start monitoring link in the navbar pointing to /signup", () => {
+  it("does not render a Start monitoring link in the navbar", () => {
     render(<Landing />);
-    const links = screen.getAllByRole("link", { name: /start monitoring/i });
-    expect(links.length).toBeGreaterThanOrEqual(1);
-    expect(links[0]).toHaveAttribute("href", "/signup");
+    const header = screen.getByRole("banner");
+    expect(header.querySelector("a[href='/signup']")).not.toBeInTheDocument();
   });
 
   it("renders a footer landmark", () => {
@@ -44,11 +43,11 @@ describe("Landing component", () => {
     expect(screen.getByText(/2026 PulseMonitor/i)).toBeInTheDocument();
   });
 
-  it("renders Log in and Sign up links in the footer", () => {
+  it("does not repeat Log in / Sign up links in the footer", () => {
     render(<Landing />);
     const footer = screen.getByRole("contentinfo");
-    expect(footer).toHaveTextContent(/log in/i);
-    expect(footer).toHaveTextContent(/sign up/i);
+    expect(footer.querySelector("a[href='/login']")).not.toBeInTheDocument();
+    expect(footer.querySelector("a[href='/signup']")).not.toBeInTheDocument();
   });
 
   it("renders the hero headline", () => {
@@ -64,11 +63,10 @@ describe("Landing component", () => {
     expect(link).toHaveAttribute("href", "/signup");
   });
 
-  it("renders the hero secondary Log in link pointing to /login", () => {
+  it("does not duplicate the Log in link inside the hero section", () => {
     render(<Landing />);
-    const links = screen.getAllByRole("link", { name: /^log in$/i });
-    const hrefs = links.map((l) => l.getAttribute("href"));
-    expect(hrefs).toContain("/login");
+    const hero = document.querySelector('[data-section="hero"]')!;
+    expect(hero.querySelector("a[href='/login']")).not.toBeInTheDocument();
   });
 
   it("renders the demo site name in the hero product card", () => {
