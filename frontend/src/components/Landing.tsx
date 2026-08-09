@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Card, CardBody } from "@/components/ui";
 import type { UptimeBucket } from "@/lib/uptime";
 
-// Mirrors primary Button styling — works on an <a> element
+// Mirrors primary Button styling - works on an <a> element
 const PRIMARY_LINK_CLS =
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-control " +
   "h-10 px-4 text-sm font-medium bg-accent text-white shadow-control " +
@@ -27,7 +27,7 @@ const HERO_BUCKETS: UptimeBucket[] = Array.from({ length: 60 }, (_, i) => ({
   tooltip: "Operational",
 }));
 const HERO_AXIS_LABELS = ["1h ago", "45m", "30m", "15m", "now"];
-const HERO_SUMMARY = "100% uptime in the last hour — all checks passed";
+const HERO_SUMMARY = "100% uptime in the last hour - all checks passed";
 
 // ─── demo data for features UptimeBar (one short outage) ─────────────────────
 const FEATURE_BUCKETS: UptimeBucket[] = Array.from({ length: 60 }, (_, i) => ({
@@ -41,13 +41,13 @@ const FEATURE_BUCKETS: UptimeBucket[] = Array.from({ length: 60 }, (_, i) => ({
   carried: false,
   tooltip: i >= 30 && i <= 35 ? "Outage detected" : "Operational",
 }));
-const FEATURE_SUMMARY = "98% uptime — one short outage detected";
+const FEATURE_SUMMARY = "98% uptime - one short outage detected";
 
 const HISTORY_ROWS = [
   { time: "12:00 PM", status: "up", latency: "134 ms" },
   { time: "11:59 AM", status: "up", latency: "142 ms" },
-  { time: "11:58 AM", status: "down", latency: "—" },
-  { time: "11:57 AM", status: "down", latency: "—" },
+  { time: "11:58 AM", status: "down", latency: "-" },
+  { time: "11:57 AM", status: "down", latency: "-" },
   { time: "11:56 AM", status: "up", latency: "138 ms" },
 ];
 
@@ -153,17 +153,17 @@ export function Landing() {
                 {
                   n: "3",
                   title: "Get alerted instantly",
-                  body: "The moment we detect a problem, we email you — before your customers notice.",
+                  body: "The moment we detect a problem, we email you - before your customers notice.",
                 },
               ].map(({ n, title, body }) => (
                 <li key={n} className="relative">
                   <span
                     aria-hidden="true"
-                    className="block select-none text-8xl font-semibold tabular-nums leading-none text-accent-wash"
+                    className="block select-none text-8xl font-semibold tabular-nums leading-none text-ink-faint mb-3"
                   >
                     {n}
                   </span>
-                  <h2 className="-mt-4 text-xl font-semibold text-ink">{title}</h2>
+                  <h2 className="text-xl font-semibold text-ink">{title}</h2>
                   <p className="mt-2 text-sm text-ink-subtle">{body}</p>
                 </li>
               ))}
@@ -182,7 +182,7 @@ export function Landing() {
               <div>
                 <h2 className="text-2xl font-semibold text-ink">Minute-by-minute checks</h2>
                 <p className="mt-4 text-ink-subtle">
-                  We check every 60 seconds — or as infrequently as once a day, your
+                  We check every 60 seconds - or as infrequently as once a day, your
                   choice. You set the cadence; we never miss a beat.
                 </p>
               </div>

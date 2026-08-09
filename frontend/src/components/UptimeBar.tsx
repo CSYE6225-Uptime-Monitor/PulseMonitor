@@ -48,9 +48,9 @@ export function UptimeBar({ buckets, axisLabels, summary, details = [], muted = 
         ))}
       </div>
 
-      <div className="mt-2 flex w-full justify-between text-[11px] leading-none tabular-nums text-ink-faint">
+      <div className="mt-2 flex w-full justify-between text-[11px] leading-none tabular-nums text-ink-subtle">
         {axisLabels.map((label, index) => (
-          <span key={`${label}-${index}`} className={index % 2 === 1 ? "hidden sm:inline" : undefined}>
+          <span key={label} className={index % 2 === 1 ? "hidden sm:inline" : undefined}>
             {label}
           </span>
         ))}

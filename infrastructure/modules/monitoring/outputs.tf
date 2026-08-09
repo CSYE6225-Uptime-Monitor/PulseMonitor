@@ -25,7 +25,7 @@ output "ping_schedule_rule_arn" {
   value       = aws_cloudwatch_event_rule.ping_schedule.arn
 }
 
-# output "alerts_topic_arn" — added in Sprint 4 alongside alerts.tf
+# output "alerts_topic_arn" - added in Sprint 4 alongside alerts.tf
 
 output "site_events_bus_name" {
   description = "Name of the custom EventBridge bus the pinger publishes SiteStatusChanged events to. Null when enable_notifications is false."

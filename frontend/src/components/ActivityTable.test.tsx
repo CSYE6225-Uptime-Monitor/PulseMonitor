@@ -42,7 +42,7 @@ describe("ActivityTable", () => {
   it("renders an em dash for a null resource", () => {
     render(<ActivityTable events={[loginFailedEvent]} nextCursor={null} onLoadMore={vi.fn()} />);
 
-    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.getByText("-")).toBeInTheDocument();
   });
 
   it("falls back to the raw event_type for an unrecognized event", () => {

@@ -1,5 +1,5 @@
 # Root module outputs.
-# Placeholders for this init sprint — real outputs (VPC id, ALB DNS name, etc.)
+# Placeholders for this init sprint - real outputs (VPC id, ALB DNS name, etc.)
 # are added as each module is implemented in later sprints.
 
 output "vpc_id" {

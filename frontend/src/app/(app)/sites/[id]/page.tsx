@@ -358,7 +358,7 @@ export default function SiteDetailPage() {
         <div className="bg-surface p-4">
           <p className="text-xs text-ink-subtle">Response time</p>
           <p className="mt-1 text-sm font-medium tabular-nums text-ink">
-            {site.status.latency_ms !== null ? `${site.status.latency_ms} ms` : "—"}
+            {site.status.latency_ms !== null ? `${site.status.latency_ms} ms` : "-"}
           </p>
         </div>
         <div className="bg-surface p-4">
@@ -368,7 +368,7 @@ export default function SiteDetailPage() {
               site.status.status_code && site.status.status_code >= 400 ? "text-down" : "text-ink"
             }`}
           >
-            {site.status.status_code ?? "—"}
+            {site.status.status_code ?? "-"}
           </p>
         </div>
         <div className="bg-surface p-4">

@@ -1,5 +1,5 @@
 # Bootstrap input variables.
-# Bucket names are globally unique — override state_bucket_name before applying.
+# Bucket names are globally unique - override state_bucket_name before applying.
 
 variable "aws_region" {
   description = "AWS region for the remote-state resources."

@@ -17,7 +17,7 @@ interface AppShellProps {
 export function AppShell({ user, onLogout, children }: AppShellProps) {
   return (
     <div className="flex min-h-full flex-1 flex-col">
-      <header className="sticky top-0 z-20 border-b border-hairline bg-surface/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-20 border-b border-hairline bg-surface">
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-6 px-4 sm:px-6">
           <Link href="/dashboard" className="focus-ring shrink-0 rounded-xs">
             <Wordmark />

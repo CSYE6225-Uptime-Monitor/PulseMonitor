@@ -8,7 +8,7 @@ import { buildUptimeView, formatUptimePercent } from "@/lib/uptime";
 import { StatusBadge } from "./StatusBadge";
 import { UptimeBar, UptimeBarSkeleton } from "./UptimeBar";
 import { IncidentPanel } from "./IncidentPanel";
-import { Card, CardBody } from "@/components/ui";
+import { Card, CardBody, Modal } from "@/components/ui";
 
 function displayHost(url: string): string {
   return url.replace(/^https?:\/\//, "").replace(/\/$/, "");
@@ -20,10 +20,8 @@ export interface SiteCardProps {
 }
 
 const SiteCardInner = function SiteCard({ site, history }: SiteCardProps) {
-  const [detailsOpenOverride, setDetailsOpenOverride] = useState<boolean | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const hasIncident = site.status.status === "down";
-  const detailsOpen = detailsOpenOverride ?? hasIncident;
-  const panelId = `incident-${site.site_id}`;
 
   const uptime = history?.window
     ? buildUptimeView(history.window, {
@@ -54,23 +52,23 @@ const SiteCardInner = function SiteCard({ site, history }: SiteCardProps) {
           <span className="text-ink-subtle">Uptime</span>
           <div className="flex items-center gap-3">
             <span className="font-medium text-ink-muted">
-              {uptime ? formatUptimePercent(uptime.percent) : "No data yet"}
+              {uptime
+                ? formatUptimePercent(uptime.percent)
+                : history?.loading || history === undefined
+                  ? "-"
+                  : "No data yet"}
             </span>
             {hasIncident && (
               <button
                 type="button"
-                aria-expanded={detailsOpen}
-                aria-controls={panelId}
-                onClick={() => setDetailsOpenOverride(!detailsOpen)}
+                onClick={() => setModalOpen(true)}
                 className="focus-ring rounded-xs py-2 -my-2 text-sm font-medium text-accent hover:text-accent-hover"
               >
-                {detailsOpen ? "Hide details" : "Show details"}
+                Show details
               </button>
             )}
           </div>
         </div>
-
-        {hasIncident && detailsOpen && <IncidentPanel id={panelId} status={site.status} />}
 
         {history?.error ? (
           <p className="text-xs text-ink-subtle">Couldn&apos;t load uptime history</p>
@@ -87,6 +85,12 @@ const SiteCardInner = function SiteCard({ site, history }: SiteCardProps) {
         )}
       </CardBody>
 
+      {hasIncident && (
+        <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={site.name}>
+          <IncidentPanel status={site.status} />
+        </Modal>
+      )}
+
       <div className="grid grid-cols-2 gap-4 border-t border-hairline bg-surface-subtle px-6 py-3 text-xs">
         <div className="min-w-0">
           <p className="text-ink-subtle">Last checked</p>
@@ -97,7 +101,7 @@ const SiteCardInner = function SiteCard({ site, history }: SiteCardProps) {
         <div>
           <p className="text-ink-subtle">Latency</p>
           <p className="mt-0.5 font-medium tabular-nums text-ink">
-            {site.status.latency_ms !== null ? `${site.status.latency_ms} ms` : "—"}
+            {site.status.latency_ms !== null ? `${site.status.latency_ms} ms` : "-"}
           </p>
         </div>
       </div>

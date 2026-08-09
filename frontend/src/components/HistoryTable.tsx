@@ -34,9 +34,9 @@ export function HistoryTable({ records, nextCursor, onLoadMore, loadingMore = fa
                   {record.status === "up" ? "Up" : "Down"}
                 </Badge>
               </TD>
-              <TD numeric>{record.status_code ?? "—"}</TD>
-              <TD numeric>{record.latency_ms !== null ? `${record.latency_ms} ms` : "—"}</TD>
-              <TD>{record.error_message ?? "—"}</TD>
+              <TD numeric>{record.status_code ?? "-"}</TD>
+              <TD numeric>{record.latency_ms !== null ? `${record.latency_ms} ms` : "-"}</TD>
+              <TD>{record.error_message ?? "-"}</TD>
             </TR>
           ))}
         </TBody>
