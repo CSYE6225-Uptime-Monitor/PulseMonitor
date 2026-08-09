@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { ApiError } from "@/lib/api";
 import { ALLOWED_FREQUENCIES, type CreateSiteInput, type UpdateSiteInput } from "@/lib/sites";
+import { Alert, Button, Checkbox, Field, Input, Select } from "@/components/ui";
 
 export interface SiteFormValues {
   url: string;
@@ -77,33 +78,30 @@ export function SiteForm(props: SiteFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      {error && <p role="alert">{error}</p>}
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {error && <Alert tone="error">{error}</Alert>}
 
-      <div>
-        <label htmlFor="site-url">URL</label>
-        <input
+      <Field htmlFor="site-url" label="URL" required>
+        <Input
           id="site-url"
           type="url"
           required
           value={values.url}
           onChange={(e) => setValues({ ...values, url: e.target.value })}
         />
-      </div>
+      </Field>
 
-      <div>
-        <label htmlFor="site-name">Name</label>
-        <input
+      <Field htmlFor="site-name" label="Name" required>
+        <Input
           id="site-name"
           required
           value={values.name}
           onChange={(e) => setValues({ ...values, name: e.target.value })}
         />
-      </div>
+      </Field>
 
-      <div>
-        <label htmlFor="site-frequency">Check frequency (minutes)</label>
-        <select
+      <Field htmlFor="site-frequency" label="Check frequency (minutes)">
+        <Select
           id="site-frequency"
           value={String(values.check_frequency_minutes)}
           onChange={(e) => setValues({ ...values, check_frequency_minutes: Number(e.target.value) })}
@@ -113,24 +111,19 @@ export function SiteForm(props: SiteFormProps) {
               {minutes}
             </option>
           ))}
-        </select>
-      </div>
+        </Select>
+      </Field>
 
-      <div>
-        <label htmlFor="site-enabled">
-          <input
-            id="site-enabled"
-            type="checkbox"
-            checked={values.enabled}
-            onChange={(e) => setValues({ ...values, enabled: e.target.checked })}
-          />
-          Enabled
-        </label>
-      </div>
+      <Checkbox
+        id="site-enabled"
+        label="Enabled"
+        checked={values.enabled}
+        onChange={(e) => setValues({ ...values, enabled: e.target.checked })}
+      />
 
-      <button type="submit" disabled={submitting || !canSubmit}>
+      <Button type="submit" disabled={submitting || !canSubmit} loading={submitting}>
         {submitting ? "Saving..." : props.mode === "create" ? "Add site" : "Save changes"}
-      </button>
+      </Button>
     </form>
   );
 }
