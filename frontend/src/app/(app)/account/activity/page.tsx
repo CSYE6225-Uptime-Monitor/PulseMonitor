@@ -3,37 +3,47 @@
 import { useRequireAuth } from "@/lib/auth";
 import { useActivity } from "@/lib/useActivity";
 import { ActivityTable } from "@/components/ActivityTable";
+import { Alert, Card, PageHeader, TextLink } from "@/components/ui";
 
 export default function AccountActivityPage() {
   const { user, loading: authLoading } = useRequireAuth();
   const { events, nextCursor, loading, loadingMore, error, loadMore } = useActivity();
 
+  // The (app) layout already gates on auth and shows a skeleton while it
+  // resolves; this is just a type-narrowing guard, not a second loading UI.
   if (authLoading || !user) {
-    return <p className="p-8 text-zinc-600 dark:text-zinc-400">Loading...</p>;
+    return null;
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-6 p-8">
-      <a href="/account" className="block text-sm font-medium text-zinc-600 underline dark:text-zinc-400">
-        Back to account
-      </a>
+    <div className="mx-auto w-full max-w-4xl space-y-6">
+      <TextLink href="/account" className="inline-flex items-center gap-1.5 text-ink-subtle hover:text-accent">
+        ← Back to account
+      </TextLink>
 
-      <h1 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">Account activity</h1>
+      <PageHeader
+        title="Account activity"
+        description="Sign-ins, profile changes, and site changes."
+      />
 
-      {loading ? (
-        <p className="text-zinc-600 dark:text-zinc-400">Loading activity...</p>
-      ) : error ? (
-        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
-          {error}
-        </p>
-      ) : (
-        <ActivityTable
-          events={events}
-          nextCursor={nextCursor}
-          onLoadMore={() => void loadMore()}
-          loadingMore={loadingMore}
-        />
-      )}
+      <Card padding="none">
+        {loading ? (
+          <p role="status" className="p-6 text-sm text-ink-subtle">
+            Loading activity...
+          </p>
+        ) : error ? (
+          <div className="p-6">
+            <Alert tone="error">{error}</Alert>
+          </div>
+        ) : (
+          <ActivityTable
+            events={events}
+            nextCursor={nextCursor}
+            onLoadMore={() => void loadMore()}
+            loadingMore={loadingMore}
+          />
+        )}
+      </Card>
     </div>
   );
 }
