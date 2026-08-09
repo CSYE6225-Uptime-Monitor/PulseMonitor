@@ -13,10 +13,12 @@ export function middleware(request: NextRequest) {
   const isRoot = pathname === "/";
 
   if (isAuthRoute || isRoot) {
-    // Logged-in users don't need the landing page or auth forms.
-    if (hasSession) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
+    // Public routes: always render them. We deliberately do NOT redirect
+    // logged-in users to /dashboard here, because middleware only sees cookie
+    // presence, not validity - a stale/expired pm_session cookie would bounce
+    // /login -> /dashboard even when the session is dead, trapping the user in
+    // a redirect loop. Sending authenticated users to the dashboard is instead
+    // handled by useRedirectIfAuthenticated, which validates via /v1/user/self.
     return NextResponse.next();
   }
 
