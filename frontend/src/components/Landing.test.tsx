@@ -50,4 +50,34 @@ describe("Landing component", () => {
     expect(footer).toHaveTextContent(/log in/i);
     expect(footer).toHaveTextContent(/sign up/i);
   });
+
+  it("renders the hero headline", () => {
+    render(<Landing />);
+    expect(
+      screen.getByRole("heading", { level: 1, name: /know the moment your site goes down/i })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the hero primary CTA linking to /signup", () => {
+    render(<Landing />);
+    const link = screen.getByRole("link", { name: /start monitoring.*it.*free/i });
+    expect(link).toHaveAttribute("href", "/signup");
+  });
+
+  it("renders the hero secondary Log in link pointing to /login", () => {
+    render(<Landing />);
+    const links = screen.getAllByRole("link", { name: /^log in$/i });
+    const hrefs = links.map((l) => l.getAttribute("href"));
+    expect(hrefs).toContain("/login");
+  });
+
+  it("renders the demo site name in the hero product card", () => {
+    render(<Landing />);
+    expect(screen.getByText("my-store.com")).toBeInTheDocument();
+  });
+
+  it("renders an 'Up' status badge in the hero product card", () => {
+    render(<Landing />);
+    expect(screen.getByText("Up")).toBeInTheDocument();
+  });
 });
