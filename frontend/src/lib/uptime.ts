@@ -60,10 +60,23 @@ export interface BuildBucketsOptions {
  */
 export function pickHistoryWindow(
   checkFrequencyMinutes: number,
-  nowMs: number = Date.now()
+  nowMs: number = Date.now(),
+  lastCheckedAtMs?: number | null
 ): { fromMs: number; toMs: number; spanMs: number } {
   const intervalMs = Math.max(1, checkFrequencyMinutes) * 60_000;
-  const spanMs = Math.min(FULL_WINDOW_MS, MAX_CHECKS_PER_WINDOW * intervalMs);
+  let spanMs = Math.min(FULL_WINDOW_MS, MAX_CHECKS_PER_WINDOW * intervalMs);
+
+  // Right after the frequency is changed to a shorter cadence, the narrower
+  // window can fall entirely after the last real check - widen it (still
+  // capped at FULL_WINDOW_MS) so existing history stays visible instead of
+  // reading as "everything disappeared" until fresh checks land.
+  if (lastCheckedAtMs != null) {
+    const sinceLastCheck = nowMs - lastCheckedAtMs;
+    if (sinceLastCheck > spanMs) {
+      spanMs = Math.min(FULL_WINDOW_MS, sinceLastCheck);
+    }
+  }
+
   return { fromMs: nowMs - spanMs, toMs: nowMs, spanMs };
 }
 
@@ -73,7 +86,8 @@ export function formatWindowLabel(spanMs: number): string {
 }
 
 export async function fetchUptimeWindow(site: Site, nowMs: number = Date.now()): Promise<UptimeWindow> {
-  const { fromMs, toMs, spanMs } = pickHistoryWindow(site.check_frequency_minutes, nowMs);
+  const lastCheckedAtMs = site.status.checked_at ? Date.parse(site.status.checked_at) : null;
+  const { fromMs, toMs, spanMs } = pickHistoryWindow(site.check_frequency_minutes, nowMs, lastCheckedAtMs);
   const page = await getSiteHistory(site.site_id, {
     from: new Date(fromMs).toISOString(),
     to: new Date(toMs).toISOString(),
