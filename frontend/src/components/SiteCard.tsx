@@ -28,7 +28,7 @@ const SiteCardInner = function SiteCard({ site, history }: SiteCardProps) {
   const hasIncident = site.status.status === "down";
 
   // React Compiler memoizes this automatically, keyed on history.window,
-  // site.check_frequency_minutes, and site.created_at — so it only recomputes
+  // site.check_frequency_minutes, and site.created_at - so it only recomputes
   // when new history actually arrives, not on every status poll.
   const uptime = history?.window
     ? buildUptimeView(history.window, {

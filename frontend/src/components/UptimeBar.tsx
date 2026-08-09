@@ -37,17 +37,33 @@ export function UptimeBar({ buckets, axisLabels, summary, details = [], muted = 
         aria-label={summary}
         className={cn("flex h-9 w-full items-stretch gap-[2px] sm:gap-[3px]", muted && "opacity-40 grayscale")}
       >
-        {buckets.map((bucket) => (
-          <div
-            key={bucket.key}
-            title={bucket.tooltip}
-            data-state={bucket.state}
-            className={cn(
-              "min-w-0 flex-1 rounded-[2px] transition-opacity duration-150 hover:opacity-60",
-              BAR_COLOR[bucket.state]
-            )}
-          />
-        ))}
+        {buckets.map((bucket, index) => {
+          const edgeCount = Math.max(1, Math.round(buckets.length * 0.1));
+          const isNearStart = index < edgeCount;
+          const isNearEnd = index >= buckets.length - edgeCount;
+          return (
+            <div key={bucket.key} className="group/bar relative min-w-0 flex-1">
+              <div
+                data-state={bucket.state}
+                className={cn(
+                  "h-full min-w-0 rounded-[2px] transition-opacity duration-150 group-hover/bar:opacity-60",
+                  BAR_COLOR[bucket.state]
+                )}
+              />
+              <span
+                role="tooltip"
+                className={cn(
+                  "pointer-events-none absolute bottom-full z-10 mb-2 whitespace-nowrap rounded-control border border-hairline bg-surface px-2 py-1 text-[11px] leading-none text-ink opacity-0 shadow-card-hover transition-opacity duration-100 group-hover/bar:opacity-100",
+                  isNearStart && "left-0",
+                  isNearEnd && "right-0",
+                  !isNearStart && !isNearEnd && "left-1/2 -translate-x-1/2"
+                )}
+              >
+                {bucket.tooltip}
+              </span>
+            </div>
+          );
+        })}
       </div>
 
       <div className="mt-2 flex w-full justify-between text-[11px] leading-none tabular-nums text-ink-subtle">
