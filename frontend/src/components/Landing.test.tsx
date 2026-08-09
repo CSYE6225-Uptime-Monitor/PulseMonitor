@@ -73,12 +73,14 @@ describe("Landing component", () => {
 
   it("renders the demo site name in the hero product card", () => {
     render(<Landing />);
-    expect(screen.getByText("my-store.com")).toBeInTheDocument();
+    const hero = document.querySelector('[data-section="hero"]')!;
+    expect(hero).toHaveTextContent("my-store.com");
   });
 
   it("renders an 'Up' status badge in the hero product card", () => {
     render(<Landing />);
-    expect(screen.getByText("Up")).toBeInTheDocument();
+    const hero = document.querySelector('[data-section="hero"]')!;
+    expect(hero).toHaveTextContent("Up");
   });
 
   it("renders the 'How It Works' section with three step titles", () => {
@@ -93,5 +95,18 @@ describe("Landing component", () => {
     expect(screen.getByText("1")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
+  });
+
+  it("renders all four feature headings", () => {
+    render(<Landing />);
+    expect(screen.getByRole("heading", { name: /minute-by-minute checks/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /email alerts that actually arrive/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /full check history/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /zero configuration/i })).toBeInTheDocument();
+  });
+
+  it("renders feature body copy", () => {
+    render(<Landing />);
+    expect(screen.getByText(/no app to check, no dashboard to refresh/i)).toBeInTheDocument();
   });
 });

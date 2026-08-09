@@ -98,7 +98,7 @@ export function Landing() {
                   href="/signup"
                   className={`${PRIMARY_LINK_CLS} h-12 px-6 text-base`}
                 >
-                  Start monitoring — it&apos;s free
+                  Start monitoring - it&apos;s free
                 </Link>
                 <Link
                   href="/login"
@@ -168,6 +168,134 @@ export function Landing() {
                 </li>
               ))}
             </ol>
+          </div>
+        </section>
+        {/* ── Features ──────────────────────────────────────── */}
+        <section
+          data-section="features"
+          className="bg-canvas px-4 py-16 sm:px-6 sm:py-20"
+        >
+          <div className="mx-auto max-w-6xl space-y-20">
+
+            {/* Feature 1: Minute-by-minute checks */}
+            <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
+              <div>
+                <h2 className="text-2xl font-semibold text-ink">Minute-by-minute checks</h2>
+                <p className="mt-4 text-ink-subtle">
+                  We check every 60 seconds — or as infrequently as once a day, your
+                  choice. You set the cadence; we never miss a beat.
+                </p>
+              </div>
+              <Card>
+                <CardBody>
+                  <UptimeBar
+                    buckets={FEATURE_BUCKETS}
+                    axisLabels={["1h ago", "45m", "30m", "15m", "now"]}
+                    summary={FEATURE_SUMMARY}
+                  />
+                </CardBody>
+              </Card>
+            </div>
+
+            {/* Feature 2: Email alerts */}
+            <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:[&>*:first-child]:order-last">
+              <div>
+                <h2 className="text-2xl font-semibold text-ink">Email alerts that actually arrive</h2>
+                <p className="mt-4 text-ink-subtle">
+                  No app to check, no dashboard to refresh. We email you the instant a
+                  check fails, and again when your site recovers.
+                </p>
+              </div>
+              <Card>
+                <CardBody className="space-y-1">
+                  <p className="text-xs text-ink-subtle">From: alerts@pulsemonitor.online</p>
+                  <p className="text-xs text-ink-subtle">
+                    Subject:{" "}
+                    <span className="font-medium text-ink">🔴 my-store.com is down</span>
+                  </p>
+                  <div className="mt-3 border-t border-hairline pt-3">
+                    <p className="text-xs text-ink-muted">
+                      We detected an issue with <strong>my-store.com</strong> at 11:58 AM.
+                      We&apos;ll notify you again when it recovers.
+                    </p>
+                  </div>
+                </CardBody>
+              </Card>
+            </div>
+
+            {/* Feature 3: Full check history */}
+            <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
+              <div>
+                <h2 className="text-2xl font-semibold text-ink">Full check history</h2>
+                <p className="mt-4 text-ink-subtle">
+                  Every check is logged. See exactly when your site went down, how long
+                  it was out, and what the response was.
+                </p>
+              </div>
+              <Card>
+                <CardBody className="p-0">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-hairline bg-surface-subtle">
+                        <th className="px-4 py-2 text-left font-medium text-ink-subtle">Time</th>
+                        <th className="px-4 py-2 text-left font-medium text-ink-subtle">Status</th>
+                        <th className="px-4 py-2 text-right font-medium text-ink-subtle">Latency</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {HISTORY_ROWS.map((row) => (
+                        <tr key={row.time} className="border-b border-hairline last:border-0">
+                          <td className="px-4 py-2 tabular-nums text-ink-muted">{row.time}</td>
+                          <td className="px-4 py-2">
+                            <span
+                              className={
+                                row.status === "up"
+                                  ? "font-medium text-up"
+                                  : "font-medium text-down"
+                              }
+                            >
+                              {row.status === "up" ? "Up" : "Down"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-right tabular-nums text-ink-muted">
+                            {row.latency}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </CardBody>
+              </Card>
+            </div>
+
+            {/* Feature 4: Zero configuration */}
+            <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:[&>*:first-child]:order-last">
+              <div>
+                <h2 className="text-2xl font-semibold text-ink">Zero configuration</h2>
+                <p className="mt-4 text-ink-subtle">
+                  One URL. That&apos;s it. No agents, no DNS changes, no YAML files.
+                  Monitoring starts in under 30 seconds.
+                </p>
+              </div>
+              <Card>
+                <CardBody className="space-y-3">
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      defaultValue="https://my-store.com"
+                      readOnly
+                      aria-label="Site URL"
+                      className="block h-10 flex-1 rounded-control border border-hairline-strong bg-surface px-3 text-sm text-ink shadow-control"
+                    />
+                    <Link href="/signup" className={PRIMARY_LINK_CLS}>
+                      Start monitoring
+                    </Link>
+                  </div>
+                  <p className="text-xs text-ink-subtle">No credit card required.</p>
+                </CardBody>
+              </Card>
+            </div>
+
           </div>
         </section>
       </main>
