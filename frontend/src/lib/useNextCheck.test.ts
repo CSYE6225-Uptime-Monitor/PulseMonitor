@@ -122,7 +122,7 @@ describe("useNextCheck", () => {
   // --- reactivity ---
 
   it("resets countdown when checkedAt updates (new check fires)", () => {
-    // Start past grace period — nothing showing
+    // Start past grace period - nothing showing
     const stale = new Date(Date.now() - 60 * 60_000).toISOString();
     const { result, rerender } = renderHook(
       ({ t }: { t: string | null }) => useNextCheck(t, 5, true),
@@ -130,7 +130,7 @@ describe("useNextCheck", () => {
     );
     expect(result.current).toBeNull();
 
-    // New check fires — checkedAt is now 1 minute ago
+    // New check fires - checkedAt is now 1 minute ago
     const fresh = new Date(Date.now() - 60_000).toISOString();
     act(() => { rerender({ t: fresh }); });
     expect(result.current).toMatch(/^\dm \d+s$/);
