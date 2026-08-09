@@ -46,7 +46,7 @@ function UserMenu({ user, onLogout }: { user: User; onLogout: () => void | Promi
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="menu"
-        aria-label={`${[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email} — account menu`}
+        aria-label={`${[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email} - account menu`}
         className="focus-ring flex h-8 w-8 items-center justify-center rounded-full border border-hairline-strong bg-surface-subtle font-mono text-xs font-medium tracking-wide text-ink transition-colors hover:border-ink-subtle hover:bg-surface-hover"
       >
         {initials(user)}

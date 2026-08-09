@@ -22,7 +22,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // All other routes are protected — gate them at the edge before any render.
+  // All other routes are protected - gate them at the edge before any render.
   // Note: this checks cookie presence only, not cryptographic validity. The
   // client-side useRequireAuth remains the authoritative guard for expired or
   // tampered sessions; middleware just eliminates the unauthenticated flash.
@@ -35,7 +35,10 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Run on every route except Next.js internals and static assets.
-    "/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg).*)",
+    // Run on every route except Next.js internals, static assets, and API
+    // proxy routes. /api/* must never hit this redirect: fetch() follows the
+    // 307 to /login, which returns HTML with a 200 status, and callers see
+    // "Request failed with status 200" instead of the real API response.
+    "/((?!api|_next/static|_next/image|favicon\\.ico|icon\\.svg).*)",
   ],
 };
