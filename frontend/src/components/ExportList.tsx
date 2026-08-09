@@ -1,4 +1,5 @@
 import type { DataExport } from "@/lib/account";
+import { Alert, Badge, Button, EmptyState, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 interface ExportListProps {
   exports: DataExport[];
@@ -10,42 +11,56 @@ interface ExportListProps {
 
 export function ExportList({ exports, loading, error, onDownload, downloadingId }: ExportListProps) {
   if (loading) {
-    return <p>Loading exports...</p>;
+    return (
+      <p role="status" className="text-sm text-ink-subtle">
+        Loading exports...
+      </p>
+    );
   }
 
   if (error) {
-    return <p role="alert">{error}</p>;
+    return <Alert tone="error">{error}</Alert>;
   }
 
   if (exports.length === 0) {
-    return <p>No exports yet. Request one to download a copy of your data.</p>;
+    return <EmptyState title="No exports yet." description="Request one to download a copy of your data." />;
   }
 
   return (
-    <table>
-      <thead>
-        <tr>
-          <th>Requested</th>
-          <th>Status</th>
-          <th>Download</th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <THead>
+        <TR>
+          <TH>Requested</TH>
+          <TH>Status</TH>
+          <TH align="right">Download</TH>
+        </TR>
+      </THead>
+      <TBody>
         {exports.map((item) => {
           const isDownloading = downloadingId === item.export_id;
           return (
-            <tr key={item.export_id}>
-              <td>{new Date(item.created_at).toLocaleString()}</td>
-              <td>{item.status === "ready" ? "Ready" : item.status}</td>
-              <td>
-                <button type="button" onClick={() => onDownload(item.export_id)} disabled={isDownloading}>
+            <TR key={item.export_id}>
+              <TD strong>{new Date(item.created_at).toLocaleString()}</TD>
+              <TD>
+                <Badge tone={item.status === "ready" ? "up" : "neutral"} dot>
+                  {item.status === "ready" ? "Ready" : item.status}
+                </Badge>
+              </TD>
+              <TD className="text-right">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => onDownload(item.export_id)}
+                  disabled={isDownloading}
+                  loading={isDownloading}
+                >
                   {isDownloading ? "Preparing..." : "Download"}
-                </button>
-              </td>
-            </tr>
+                </Button>
+              </TD>
+            </TR>
           );
         })}
-      </tbody>
-    </table>
+      </TBody>
+    </Table>
   );
 }

@@ -1,26 +1,137 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ------------------------------------------------------------------ *
+ * Design tokens. Light mode only - there is deliberately no dark
+ * variant. Tailwind v4 keys these off the namespace prefix:
+ *   --color-*  -> bg-/text-/border-/ring-/accent-/divide-/outline-
+ *   --radius-* -> rounded-
+ *   --shadow-* -> shadow-
+ * ------------------------------------------------------------------ */
+@theme {
+  /* Surfaces */
+  --color-canvas:         #f7f8fa;  /* page background */
+  --color-surface:        #ffffff;  /* cards, nav bar, inputs */
+  --color-surface-subtle: #f9fafb;  /* table headers, card footers, row hover */
+  --color-surface-hover:  #f3f4f6;  /* ghost button hover, skeletons */
+
+  /* Hairlines */
+  --color-hairline:        #e5e7eb; /* card + table + nav borders */
+  --color-hairline-strong: #d1d5db; /* input + secondary-button borders */
+
+  /* Text */
+  --color-ink:        #111827; /* headings, primary values */
+  --color-ink-muted:  #374151; /* body copy, table cells */
+  --color-ink-subtle: #6b7280; /* labels, descriptions, secondary meta */
+  --color-ink-faint:  #9ca3af; /* placeholders only, never real content (2.85:1) */
+
+  /* Accent (links + primary action) */
+  --color-accent:          #2563eb;
+  --color-accent-hover:    #1d4ed8;
+  --color-accent-active:   #1e40af;
+  --color-accent-wash:     #eff6ff;
+  --color-accent-hairline: #bfdbfe;
+
+  /* Status: up */
+  --color-up:          #047857;
+  --color-up-bar:      #10b981;
+  --color-up-wash:     #ecfdf5;
+  --color-up-hairline: #a7f3d0;
+
+  /* Status: down */
+  --color-down:          #b91c1c;
+  --color-down-bar:      #ef4444;
+  --color-down-wash:     #fef2f2;
+  --color-down-hairline: #fecaca;
+
+  /* Status: unknown / paused / never checked - pending, not error */
+  --color-unknown:          #4b5563;
+  --color-unknown-bar:      #9ca3af;
+  --color-unknown-wash:     #f3f4f6;
+  --color-unknown-hairline: #e5e7eb;
+
+  /* Uptime bar: mixed pass/fail in one bucket */
+  --color-partial-bar: #fbbf24;
+  --color-empty-bar:   #e5e7eb;
+
+  /* Destructive action */
+  --color-danger:        #dc2626;
+  --color-danger-hover:  #b91c1c;
+  --color-danger-active: #991b1b;
+
+  /* Positive feedback (distinct name from status-up so the two can drift) */
+  --color-success:          #047857;
+  --color-success-wash:     #ecfdf5;
+  --color-success-hairline: #a7f3d0;
+
+  /* Focus */
+  --color-focus: #2563eb;
+
+  /* Radii - deliberately NOT named lg/md/xl so the built-ins survive */
+  --radius-card:    0.875rem; /* 14px */
+  --radius-control: 0.5rem;   /* 8px  */
+  --radius-pill:    9999px;
+
+  /* Elevation - "barely there", cool-grey tinted rather than pure black */
+  --shadow-card:       0 1px 2px 0 rgb(16 24 40 / 0.04), 0 1px 3px 0 rgb(16 24 40 / 0.06);
+  --shadow-card-hover: 0 2px 4px -1px rgb(16 24 40 / 0.06), 0 4px 12px -2px rgb(16 24 40 / 0.08);
+  --shadow-control:    0 1px 2px 0 rgb(16 24 40 / 0.05);
+
+  /* Motion - Operate mode: fast, non-decorative */
+  --default-transition-duration: 150ms;
+  --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* next/font sets these on <html>; `inline` dereferences them so
+   `font-sans` compiles straight to var(--font-geist-sans). */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ------------------------------------------------------------------ *
+ * One focus treatment for the whole app. Uses native outline rather
+ * than a box-shadow ring: it follows border-radius automatically,
+ * paints outside overflow-hidden ancestors, and survives
+ * forced-colors mode. Must be @utility (not @layer utilities) so it
+ * participates in the cascade correctly and can take variants.
+ * ------------------------------------------------------------------ */
+@utility focus-ring {
+  &:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  html {
+    /* Without this, macOS dark mode renders the native <select> popup,
+       scrollbars, and Chrome autofill in dark colors on our light UI. */
+    color-scheme: light;
+  }
+
+  /* Chrome autofill overrides input background with its own blue/yellow. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--color-ink);
+    box-shadow: 0 0 0 1000px var(--color-surface) inset;
+    caret-color: var(--color-ink);
+  }
+
+  ::placeholder {
+    color: var(--color-ink-faint);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
 }

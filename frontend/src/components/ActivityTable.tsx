@@ -1,4 +1,5 @@
 import { ACTIVITY_EVENT_LABELS, type ActivityEvent } from "@/lib/account";
+import { Badge, Button, EmptyState, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 interface ActivityTableProps {
   events: ActivityEvent[];
@@ -9,36 +10,42 @@ interface ActivityTableProps {
 
 export function ActivityTable({ events, nextCursor, onLoadMore, loadingMore = false }: ActivityTableProps) {
   if (events.length === 0) {
-    return <p>No account activity yet.</p>;
+    return <EmptyState title="No account activity yet." />;
   }
 
   return (
     <div>
-      <table>
-        <thead>
-          <tr>
-            <th>When</th>
-            <th>Event</th>
-            <th>Resource</th>
-            <th>Outcome</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table>
+        <THead>
+          <TR>
+            <TH>When</TH>
+            <TH>Event</TH>
+            <TH>Resource</TH>
+            <TH>Outcome</TH>
+          </TR>
+        </THead>
+        <TBody>
           {events.map((event) => (
-            <tr key={event.event_id}>
-              <td>{new Date(event.occurred_at).toLocaleString()}</td>
-              <td>{ACTIVITY_EVENT_LABELS[event.event_type] ?? event.event_type}</td>
-              <td>{event.resource_id ?? "—"}</td>
-              <td data-outcome={event.outcome}>{event.outcome === "success" ? "Success" : "Failed"}</td>
-            </tr>
+            <TR key={event.event_id}>
+              <TD strong>{new Date(event.occurred_at).toLocaleString()}</TD>
+              <TD>{ACTIVITY_EVENT_LABELS[event.event_type] ?? event.event_type}</TD>
+              <TD>{event.resource_id ?? "—"}</TD>
+              <TD data-outcome={event.outcome}>
+                <Badge tone={event.outcome === "success" ? "neutral" : "down"} dot={event.outcome === "failure"}>
+                  {event.outcome === "success" ? "Success" : "Failed"}
+                </Badge>
+              </TD>
+            </TR>
           ))}
-        </tbody>
-      </table>
+        </TBody>
+      </Table>
 
       {nextCursor !== null && (
-        <button type="button" onClick={onLoadMore} disabled={loadingMore}>
-          {loadingMore ? "Loading..." : "Load more"}
-        </button>
+        <div className="flex justify-center border-t border-hairline bg-surface-subtle px-6 py-3">
+          <Button variant="secondary" size="sm" onClick={onLoadMore} disabled={loadingMore} loading={loadingMore}>
+            {loadingMore ? "Loading..." : "Load more"}
+          </Button>
+        </div>
       )}
     </div>
   );
