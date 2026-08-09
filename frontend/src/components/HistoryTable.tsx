@@ -28,9 +28,9 @@ function HistoryTableInner({ records, nextCursor, onLoadMore, loadingMore = fals
           <TR>
             <TH>Checked at</TH>
             <TH>Status</TH>
-            <TH align="right">Status code</TH>
+            <TH align="right" className="hidden sm:table-cell">Status code</TH>
             <TH align="right">Latency</TH>
-            <TH>Error</TH>
+            <TH className="hidden sm:table-cell">Error</TH>
           </TR>
         </THead>
         <TBody>
@@ -42,9 +42,9 @@ function HistoryTableInner({ records, nextCursor, onLoadMore, loadingMore = fals
                   {record.status === "up" ? "Up" : "Down"}
                 </Badge>
               </TD>
-              <TD numeric>{record.status_code ?? "-"}</TD>
+              <TD numeric className="hidden sm:table-cell">{record.status_code ?? "-"}</TD>
               <TD numeric>{record.latency_ms !== null ? `${record.latency_ms} ms` : "-"}</TD>
-              <TD>{record.error_message ?? "-"}</TD>
+              <TD className="hidden sm:table-cell">{record.error_message ?? "-"}</TD>
             </TR>
           ))}
         </TBody>

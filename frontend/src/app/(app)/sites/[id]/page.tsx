@@ -17,6 +17,7 @@ import {
   type UpdateSiteInput,
 } from "@/lib/sites";
 import { buildUptimeView, formatUptimePercent, pickHistoryWindow } from "@/lib/uptime";
+import { useNextCheck } from "@/lib/useNextCheck";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SiteSettingsModal } from "@/components/SiteSettingsModal";
 import { HistoryTable } from "@/components/HistoryTable";
@@ -210,6 +211,12 @@ export default function SiteDetailPage() {
   // Avoid allocating a reversed copy on every status-poll re-render.
   const reversedRecords = useMemo(() => [...records].reverse(), [records]);
 
+  const nextCheck = useNextCheck(
+    site?.status.checked_at ?? null,
+    site?.check_frequency_minutes ?? 5,
+    site?.enabled ?? false
+  );
+
   // The (app) layout already gates on auth and shows a skeleton while it
   // resolves; this is just a type-narrowing guard, not a second loading UI.
   if (authLoading || !user) {
@@ -366,6 +373,11 @@ export default function SiteDetailPage() {
           <p className="mt-1 text-sm font-medium text-ink">
             {site.status.checked_at ? new Date(site.status.checked_at).toLocaleString() : "Never checked"}
           </p>
+          {nextCheck && (
+            <p className="mt-0.5 text-xs tabular-nums text-ink-subtle">
+              Next in {nextCheck}
+            </p>
+          )}
         </div>
         <div className="bg-surface p-4">
           <p className="text-xs text-ink-subtle">Response time</p>

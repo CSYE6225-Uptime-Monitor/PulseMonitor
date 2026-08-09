@@ -27,7 +27,7 @@ export interface CardHeaderProps {
 
 export function CardHeader({ title, description, actions, className }: CardHeaderProps) {
   return (
-    <div className={cn("flex items-start justify-between gap-4 border-b border-hairline px-6 py-4", className)}>
+    <div className={cn("flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b border-hairline px-6 py-4", className)}>
       <div className="min-w-0">
         {title && <h2 className="text-base font-semibold text-ink">{title}</h2>}
         {description && <p className="mt-0.5 text-sm text-ink-subtle">{description}</p>}
