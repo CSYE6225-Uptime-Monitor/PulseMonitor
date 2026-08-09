@@ -279,15 +279,15 @@ export function Landing() {
               </div>
               <Card>
                 <CardBody className="space-y-3">
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <input
                       type="url"
                       defaultValue="https://my-store.com"
                       readOnly
                       aria-label="Site URL"
-                      className="block h-10 flex-1 rounded-control border border-hairline-strong bg-surface px-3 text-sm text-ink shadow-control"
+                      className="block h-10 w-full rounded-control border border-hairline-strong bg-surface px-3 text-sm text-ink shadow-control sm:flex-1"
                     />
-                    <Link href="/signup" className={PRIMARY_LINK_CLS}>
+                    <Link href="/signup" className={`${PRIMARY_LINK_CLS} shrink-0`}>
                       Start monitoring
                     </Link>
                   </div>

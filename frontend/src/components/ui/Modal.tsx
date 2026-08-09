@@ -42,7 +42,7 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
         if (e.target === e.currentTarget) onClose();
       }}
       className={cn(
-        "m-auto w-full max-w-md rounded-card border border-hairline bg-surface p-0 shadow-lg",
+        "m-auto mx-4 w-[calc(100%-2rem)] max-w-md rounded-card border border-hairline bg-surface p-0 shadow-lg sm:mx-auto sm:w-full",
         "backdrop:bg-ink/40 backdrop:backdrop-blur-[2px]",
         "open:animate-in open:fade-in-0 open:zoom-in-95",
         className
