@@ -47,7 +47,7 @@ export interface HistoryPage {
 export const ALLOWED_FREQUENCIES = [5, 10, 15, 30, 60, 120, 360, 720, 1440] as const;
 
 export function formatFrequency(minutes: number): string {
-  if (minutes < 60) return `Every ${minutes} min`;
+  if (minutes < 60) return `Every ${minutes} minutes`;
   if (minutes === 60) return "Every hour";
   if (minutes < 1440) return `Every ${minutes / 60} hours`;
   return "Once a day";

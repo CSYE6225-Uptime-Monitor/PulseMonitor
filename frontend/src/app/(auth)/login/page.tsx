@@ -22,7 +22,7 @@ export default function LoginPage() {
       await login(form);
       router.push("/dashboard");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Invalid email or password.");
+      setError(err instanceof ApiError ? err.message : "Couldn't log in. Check your email and password.");
     } finally {
       setSubmitting(false);
     }
