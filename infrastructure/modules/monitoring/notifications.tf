@@ -92,10 +92,21 @@ resource "aws_iam_role_policy" "notifier" {
         Resource = [var.users_user_id_index_arn]
       },
       {
-        Sid      = "SendTransitionEmail"
-        Effect   = "Allow"
-        Action   = ["ses:SendEmail"]
-        Resource = [aws_sesv2_email_identity.sender[0].arn, aws_sesv2_configuration_set.notifications[0].arn]
+        Sid    = "SendTransitionEmail"
+        Effect = "Allow"
+        Action = ["ses:SendEmail"]
+        # While the SES account is in the sandbox, SendEmail is authorized
+        # against the DESTINATION identities too, not just the sender - so the
+        # verified-recipient identities must be listed here or every send is
+        # denied on the recipient ARN (AccessDeniedException). The for-comp
+        # collapses to an empty list once production access is granted and
+        # notification_verified_recipients is cleared, reverting this to the
+        # sender-only grant that end state needs. The ses:FromAddress condition
+        # still constrains who we can send AS regardless of resource breadth.
+        Resource = concat(
+          [aws_sesv2_email_identity.sender[0].arn, aws_sesv2_configuration_set.notifications[0].arn],
+          [for r in aws_sesv2_email_identity.verified_recipients : r.arn],
+        )
         Condition = {
           StringEquals = { "ses:FromAddress" = var.notification_sender_email }
         }
