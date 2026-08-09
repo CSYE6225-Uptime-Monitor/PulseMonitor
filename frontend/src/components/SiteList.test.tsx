@@ -40,18 +40,18 @@ const unknownSite: Site = {
 };
 
 describe("SiteList", () => {
-  it("shows a loading state and no table while loading", () => {
+  it("shows a loading state and no list while loading", () => {
     render(<SiteList sites={[]} loading error={null} />);
 
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.queryByRole("list")).not.toBeInTheDocument();
   });
 
-  it("shows an error message and no table when loading failed", () => {
+  it("shows an error message and no list when loading failed", () => {
     render(<SiteList sites={[]} loading={false} error="Failed to load sites." />);
 
     expect(screen.getByRole("alert")).toHaveTextContent("Failed to load sites.");
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.queryByRole("list")).not.toBeInTheDocument();
   });
 
   it("shows an empty state when there are no sites", () => {
@@ -76,11 +76,11 @@ describe("SiteList", () => {
     expect(screen.getByText(/never checked/i)).toBeInTheDocument();
   });
 
-  it("keeps showing the last known table alongside the error when a later poll fails", () => {
+  it("keeps showing the last known list alongside the error when a later poll fails", () => {
     render(<SiteList sites={[upSite]} loading={false} error="Failed to load sites." />);
 
     expect(screen.getByRole("alert")).toHaveTextContent("Failed to load sites.");
-    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getByRole("list")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Example" })).toBeInTheDocument();
   });
 });
