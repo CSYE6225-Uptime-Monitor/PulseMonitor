@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, memo } from "react";
+import { memo, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Site } from "@/lib/sites";
 import type { SiteUptimeEntry } from "@/lib/useSiteHistories";
@@ -11,7 +11,11 @@ import { IncidentPanel } from "./IncidentPanel";
 import { Card, CardBody, Modal } from "@/components/ui";
 
 function displayHost(url: string): string {
-  return url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  }
 }
 
 export interface SiteCardProps {
@@ -23,12 +27,19 @@ const SiteCardInner = function SiteCard({ site, history }: SiteCardProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const hasIncident = site.status.status === "down";
 
-  const uptime = history?.window
-    ? buildUptimeView(history.window, {
-        checkIntervalMinutes: site.check_frequency_minutes,
-        monitoredSinceMs: Date.parse(site.created_at),
-      })
-    : null;
+  const uptime = useMemo(
+    () =>
+      history?.window
+        ? buildUptimeView(history.window, {
+            checkIntervalMinutes: site.check_frequency_minutes,
+            monitoredSinceMs: Date.parse(site.created_at),
+          })
+        : null,
+    // history.window is a stable reference until checked_at changes (useSiteHistories cache key),
+    // so this only recomputes when new history actually arrives, not on every status poll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [history?.window, site.check_frequency_minutes, site.created_at]
+  );
 
   return (
     <Card interactive className="flex h-full flex-col">
@@ -37,9 +48,28 @@ const SiteCardInner = function SiteCard({ site, history }: SiteCardProps) {
           <div className="min-w-0">
             <Link
               href={`/sites/${site.site_id}`}
-              className="focus-ring block truncate rounded-xs text-base font-semibold text-ink hover:text-accent"
+              className="focus-ring flex min-w-0 items-center gap-1.5 rounded-xs text-base font-semibold text-ink hover:text-accent"
             >
-              {site.name}
+              {hasIncident && (
+                <svg
+                  aria-label="Site is down"
+                  role="img"
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="shrink-0 text-down"
+                >
+                  <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+              )}
+              <span className="truncate">{site.name}</span>
             </Link>
             <p className="mt-0.5 truncate text-sm text-ink-subtle" title={site.url}>
               {displayHost(site.url)}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useRequireAuth } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
@@ -17,20 +18,18 @@ import {
 } from "@/lib/sites";
 import { buildUptimeView, formatUptimePercent, pickHistoryWindow } from "@/lib/uptime";
 import { StatusBadge } from "@/components/StatusBadge";
-import { SiteForm, type SiteFormValues } from "@/components/SiteForm";
+import { SiteSettingsModal } from "@/components/SiteSettingsModal";
 import { HistoryTable } from "@/components/HistoryTable";
 import { UptimeBar, UptimeBarSkeleton } from "@/components/UptimeBar";
 import { IncidentPanel } from "@/components/IncidentPanel";
 import {
   Alert,
-  Button,
   Card,
   CardBody,
   CardHeader,
   EmptyState,
   PageHeader,
   Skeleton,
-  TextLink,
 } from "@/components/ui";
 
 // Matches the dashboard's poll cadence (useSites.ts) - without this, the
@@ -62,8 +61,6 @@ export default function SiteDetailPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [detailsOpenOverride, setDetailsOpenOverride] = useState<boolean | null>(null);
 
   // Read inside the status-poll interval below without making that effect
@@ -210,6 +207,9 @@ export default function SiteDetailPage() {
     );
   }, [records, historyWindow, site]);
 
+  // Avoid allocating a reversed copy on every status-poll re-render.
+  const reversedRecords = useMemo(() => [...records].reverse(), [records]);
+
   // The (app) layout already gates on auth and shows a skeleton while it
   // resolves; this is just a type-narrowing guard, not a second loading UI.
   if (authLoading || !user) {
@@ -243,7 +243,17 @@ export default function SiteDetailPage() {
           <EmptyState
             title="Site not found"
             description="This site doesn't exist in your account."
-            action={<TextLink href="/dashboard">Back to dashboard</TextLink>}
+            action={
+              <Link
+                href="/dashboard"
+                className="focus-ring group inline-flex items-center gap-2 rounded-xs font-mono text-xs uppercase tracking-widest text-ink-subtle transition-colors hover:text-ink"
+              >
+                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" className="transition-transform group-hover:-translate-x-0.5">
+                  <path d="M7.5 2L3.5 6L7.5 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Dashboard
+              </Link>
+            }
           />
         </Card>
       </div>
@@ -264,25 +274,9 @@ export default function SiteDetailPage() {
   }
 
   async function handleDelete() {
-    if (!confirmingDelete) {
-      setConfirmingDelete(true);
-      return;
-    }
-    setConfirmingDelete(false);
-    try {
-      await deleteSite(siteId);
-      router.push("/dashboard");
-    } catch (err) {
-      setDeleteError(err instanceof ApiError ? err.message : "Couldn't delete this site. Try again.");
-    }
+    await deleteSite(siteId);
+    router.push("/dashboard");
   }
-
-  const formValues: SiteFormValues = {
-    url: site.url,
-    name: site.name,
-    check_frequency_minutes: site.check_frequency_minutes,
-    enabled: site.enabled,
-  };
 
   const hasIncident = site.status.status === "down";
   const detailsOpen = detailsOpenOverride ?? hasIncident;
@@ -290,9 +284,22 @@ export default function SiteDetailPage() {
   return (
     <div className="mx-auto w-full max-w-4xl space-y-8">
       <div className="space-y-1">
-        <TextLink href="/dashboard" className="inline-flex items-center gap-1.5 py-2 -my-2 text-ink-subtle hover:text-accent">
-          ← Back to dashboard
-        </TextLink>
+        <Link
+          href="/dashboard"
+          className="focus-ring group inline-flex items-center gap-2 rounded-xs py-1 -my-1 font-mono text-xs uppercase tracking-widest text-ink-subtle transition-colors hover:text-ink"
+        >
+          <svg
+            aria-hidden="true"
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            className="transition-transform group-hover:-translate-x-0.5"
+          >
+            <path d="M7.5 2L3.5 6L7.5 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Dashboard
+        </Link>
 
         <PageHeader
           title={site.name}
@@ -306,7 +313,12 @@ export default function SiteDetailPage() {
               {site.url}
             </a>
           }
-          actions={<StatusBadge status={site.status.status} />}
+          actions={
+            <div className="flex items-center gap-2">
+              <StatusBadge status={site.status.status} />
+              <SiteSettingsModal site={site} onUpdate={handleUpdate} onDelete={handleDelete} />
+            </div>
+          }
           className="mb-0"
         />
       </div>
@@ -386,47 +398,13 @@ export default function SiteDetailPage() {
           </div>
         )}
         <HistoryTable
-          records={[...records].reverse()}
+          records={reversedRecords}
           nextCursor={nextCursor}
           onLoadMore={() => historyWindow && nextCursor && loadHistory(historyWindow, nextCursor)}
           loadingMore={historyLoading}
         />
       </Card>
 
-      <Card padding="none">
-        <CardHeader title="Settings" />
-        <CardBody>
-          {/* Remount on every successful update: the backend trims/normalizes
-              fields (e.g. name), and SiteForm's local state is only seeded from
-              initialValues on mount - without a fresh key, a save would leave
-              the un-normalized text on screen with "Save changes" stuck enabled. */}
-          <SiteForm key={site.updated_at} mode="edit" initialValues={formValues} onSubmit={handleUpdate} />
-        </CardBody>
-      </Card>
-
-      <Card padding="none" className="border-down-hairline">
-        <CardHeader title={<span className="text-down">Danger zone</span>} />
-        <CardBody className="space-y-3">
-          <p className="text-sm text-ink-subtle">
-            Deleting removes this site and all of its check history. This cannot be undone.
-          </p>
-          {deleteError && <Alert tone="error">{deleteError}</Alert>}
-          {confirmingDelete ? (
-            <div className="flex items-center gap-3">
-              <Button type="button" variant="danger" onClick={handleDelete}>
-                Confirm deletion
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => setConfirmingDelete(false)}>
-                Cancel
-              </Button>
-            </div>
-          ) : (
-            <Button type="button" variant="danger" onClick={handleDelete}>
-              Delete site
-            </Button>
-          )}
-        </CardBody>
-      </Card>
     </div>
   );
 }
