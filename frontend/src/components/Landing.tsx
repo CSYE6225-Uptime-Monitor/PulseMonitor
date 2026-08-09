@@ -132,6 +132,44 @@ export function Landing() {
             </div>
           </div>
         </section>
+        {/* ── How It Works ──────────────────────────────────── */}
+        <section
+          data-section="how-it-works"
+          className="border-b border-hairline bg-canvas px-4 py-16 sm:px-6 sm:py-20"
+        >
+          <div className="mx-auto max-w-6xl">
+            <ol className="grid grid-cols-1 gap-10 md:grid-cols-3">
+              {[
+                {
+                  n: "1",
+                  title: "Add your site",
+                  body: "Paste in your URL. No configuration, no agents to install.",
+                },
+                {
+                  n: "2",
+                  title: "We check it every minute",
+                  body: "PulseMonitor sends a request to your site every minute, around the clock.",
+                },
+                {
+                  n: "3",
+                  title: "Get alerted instantly",
+                  body: "The moment we detect a problem, we email you — before your customers notice.",
+                },
+              ].map(({ n, title, body }) => (
+                <li key={n} className="relative">
+                  <span
+                    aria-hidden="true"
+                    className="block select-none text-8xl font-semibold tabular-nums leading-none text-accent-wash"
+                  >
+                    {n}
+                  </span>
+                  <h2 className="-mt-4 text-xl font-semibold text-ink">{title}</h2>
+                  <p className="mt-2 text-sm text-ink-subtle">{body}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
       </main>
 
       {/* ── Footer ─────────────────────────────────────────── */}

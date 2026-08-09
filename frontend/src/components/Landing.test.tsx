@@ -80,4 +80,18 @@ describe("Landing component", () => {
     render(<Landing />);
     expect(screen.getByText("Up")).toBeInTheDocument();
   });
+
+  it("renders the 'How It Works' section with three step titles", () => {
+    render(<Landing />);
+    expect(screen.getByText("Add your site")).toBeInTheDocument();
+    expect(screen.getByText("We check it every minute")).toBeInTheDocument();
+    expect(screen.getByText("Get alerted instantly")).toBeInTheDocument();
+  });
+
+  it("renders the three step numbers 1, 2, 3", () => {
+    render(<Landing />);
+    expect(screen.getByText("1")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+  });
 });
