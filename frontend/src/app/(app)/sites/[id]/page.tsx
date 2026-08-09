@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useRequireAuth } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 import {
   deleteSite,
+  formatFrequency,
   getSite,
   getSiteHistory,
   getSiteStatus,
@@ -15,21 +17,20 @@ import {
   type UpdateSiteInput,
 } from "@/lib/sites";
 import { buildUptimeView, formatUptimePercent, pickHistoryWindow } from "@/lib/uptime";
+import { useNextCheck } from "@/lib/useNextCheck";
 import { StatusBadge } from "@/components/StatusBadge";
-import { SiteForm, type SiteFormValues } from "@/components/SiteForm";
+import { SiteSettingsModal } from "@/components/SiteSettingsModal";
 import { HistoryTable } from "@/components/HistoryTable";
 import { UptimeBar, UptimeBarSkeleton } from "@/components/UptimeBar";
 import { IncidentPanel } from "@/components/IncidentPanel";
 import {
   Alert,
-  Button,
   Card,
   CardBody,
   CardHeader,
   EmptyState,
   PageHeader,
   Skeleton,
-  TextLink,
 } from "@/components/ui";
 
 // Matches the dashboard's poll cadence (useSites.ts) - without this, the
@@ -43,12 +44,6 @@ interface HistoryWindow {
   spanMs: number;
 }
 
-function formatFrequency(minutes: number): string {
-  if (minutes < 60) return `Every ${minutes} minutes`;
-  if (minutes === 60) return "Every hour";
-  if (minutes < 1440) return `Every ${minutes / 60} hours`;
-  return "Once a day";
-}
 
 export default function SiteDetailPage() {
   const { user, loading: authLoading } = useRequireAuth();
@@ -67,7 +62,6 @@ export default function SiteDetailPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [detailsOpenOverride, setDetailsOpenOverride] = useState<boolean | null>(null);
 
   // Read inside the status-poll interval below without making that effect
@@ -94,7 +88,7 @@ export default function SiteDetailPage() {
       } catch (err) {
         // Without this catch, a rejected fetch here escaped as an unhandled
         // promise rejection - records simply stayed [] with no visible error.
-        setHistoryError(err instanceof ApiError ? err.message : "Failed to load history.");
+        setHistoryError(err instanceof ApiError ? err.message : "Couldn't load check history.");
       } finally {
         setHistoryLoading(false);
       }
@@ -155,7 +149,7 @@ export default function SiteDetailPage() {
         if (err instanceof ApiError && err.status === 404) {
           setNotFound(true);
         } else {
-          setError(err instanceof ApiError ? err.message : "Failed to load site.");
+          setError(err instanceof ApiError ? err.message : "Couldn't load this site.");
         }
       } finally {
         if (!cancelled) setSiteLoading(false);
@@ -214,6 +208,15 @@ export default function SiteDetailPage() {
     );
   }, [records, historyWindow, site]);
 
+  // Avoid allocating a reversed copy on every status-poll re-render.
+  const reversedRecords = useMemo(() => [...records].reverse(), [records]);
+
+  const nextCheck = useNextCheck(
+    site?.status.checked_at ?? null,
+    site?.check_frequency_minutes ?? 5,
+    site?.enabled ?? false
+  );
+
   // The (app) layout already gates on auth and shows a skeleton while it
   // resolves; this is just a type-narrowing guard, not a second loading UI.
   if (authLoading || !user) {
@@ -222,17 +225,19 @@ export default function SiteDetailPage() {
 
   if (siteLoading) {
     return (
-      <div className="mx-auto w-full max-w-4xl space-y-6">
+      <div className="mx-auto w-full max-w-4xl space-y-8">
         <Skeleton className="h-8 w-48" />
-        <Card padding="md">
-          <UptimeBarSkeleton />
-        </Card>
-        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-hairline bg-hairline sm:grid-cols-4">
+        <div className="space-y-3">
+          <Card padding="md">
+            <UptimeBarSkeleton />
+          </Card>
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-hairline bg-hairline sm:grid-cols-4">
           {Array.from({ length: 4 }, (_, i) => (
             <div key={i} className="bg-surface p-4">
               <Skeleton className="h-8 w-full" />
             </div>
           ))}
+          </div>
         </div>
       </div>
     );
@@ -243,8 +248,19 @@ export default function SiteDetailPage() {
       <div className="mx-auto w-full max-w-4xl">
         <Card padding="none">
           <EmptyState
-            title="That site doesn't exist, or it's no longer in your account."
-            action={<TextLink href="/dashboard">Back to dashboard</TextLink>}
+            title="Site not found"
+            description="This site doesn't exist in your account."
+            action={
+              <Link
+                href="/dashboard"
+                className="focus-ring group inline-flex items-center gap-2 rounded-xs font-mono text-xs uppercase tracking-widest text-ink-subtle transition-colors hover:text-ink"
+              >
+                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" className="transition-transform group-hover:-translate-x-0.5">
+                  <path d="M7.5 2L3.5 6L7.5 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Dashboard
+              </Link>
+            }
           />
         </Card>
       </div>
@@ -265,34 +281,33 @@ export default function SiteDetailPage() {
   }
 
   async function handleDelete() {
-    if (!site || !window.confirm(`Delete ${site.name}? This cannot be undone.`)) {
-      return;
-    }
-    try {
-      await deleteSite(siteId);
-      router.push("/dashboard");
-    } catch (err) {
-      setDeleteError(err instanceof ApiError ? err.message : "Failed to delete site.");
-    }
+    await deleteSite(siteId);
+    router.push("/dashboard");
   }
-
-  const formValues: SiteFormValues = {
-    url: site.url,
-    name: site.name,
-    check_frequency_minutes: site.check_frequency_minutes,
-    enabled: site.enabled,
-  };
 
   const hasIncident = site.status.status === "down";
   const detailsOpen = detailsOpenOverride ?? hasIncident;
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6">
-      <TextLink href="/dashboard" className="inline-flex items-center gap-1.5 text-ink-subtle hover:text-accent">
-        ← Back to dashboard
-      </TextLink>
+    <div className="mx-auto w-full max-w-4xl space-y-8">
+      <div className="space-y-1">
+        <Link
+          href="/dashboard"
+          className="focus-ring group inline-flex items-center gap-2 rounded-xs py-1 -my-1 font-mono text-xs uppercase tracking-widest text-ink-subtle transition-colors hover:text-ink"
+        >
+          <svg
+            aria-hidden="true"
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            className="transition-transform group-hover:-translate-x-0.5"
+          >
+            <path d="M7.5 2L3.5 6L7.5 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Dashboard
+        </Link>
 
-      <div>
         <PageHeader
           title={site.name}
           description={
@@ -305,15 +320,21 @@ export default function SiteDetailPage() {
               {site.url}
             </a>
           }
-          actions={<StatusBadge status={site.status.status} />}
+          actions={
+            <div className="flex items-center gap-2">
+              <StatusBadge status={site.status.status} />
+              <SiteSettingsModal site={site} onUpdate={handleUpdate} onDelete={handleDelete} />
+            </div>
+          }
           className="mb-0"
         />
       </div>
 
-      <Card padding="none">
+      <div className="space-y-3">
+        <Card padding="none">
         <CardHeader
           title="Uptime"
-          description={uptime ? uptime.windowLabel : undefined}
+          description={uptime ? `${formatUptimePercent(uptime.percent)} · ${uptime.windowLabel}` : undefined}
           actions={
             hasIncident && (
               <button
@@ -321,7 +342,7 @@ export default function SiteDetailPage() {
                 aria-expanded={detailsOpen}
                 aria-controls="incident-panel"
                 onClick={() => setDetailsOpenOverride(!detailsOpen)}
-                className="focus-ring inline-flex items-center gap-1 rounded-xs text-sm font-medium text-accent hover:text-accent-hover"
+                className="focus-ring inline-flex items-center gap-1 rounded-xs py-2 -my-2 text-sm font-medium text-accent hover:text-accent-hover"
               >
                 {detailsOpen ? "Hide details" : "Show details"}
               </button>
@@ -329,14 +350,6 @@ export default function SiteDetailPage() {
           }
         />
         <CardBody className="space-y-4">
-          <div className="flex items-center justify-between text-sm">
-            <span className="font-medium text-ink-muted">Uptime</span>
-            <span className="text-ink-subtle">
-              {uptime ? formatUptimePercent(uptime.percent) : "No data yet"}
-              {uptime && uptime.percent !== null && (hasIncident ? " – Current issues" : " – No current issues")}
-            </span>
-          </div>
-
           {hasIncident && detailsOpen && <IncidentPanel id="incident-panel" status={site.status} />}
 
           {uptime ? (
@@ -356,56 +369,38 @@ export default function SiteDetailPage() {
 
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-hairline bg-hairline sm:grid-cols-4">
         <div className="bg-surface p-4">
-          <p className="text-xs uppercase tracking-wide text-ink-faint">Last checked</p>
+          <p className="text-xs text-ink-subtle">Last checked</p>
           <p className="mt-1 text-sm font-medium text-ink">
             {site.status.checked_at ? new Date(site.status.checked_at).toLocaleString() : "Never checked"}
           </p>
+          {nextCheck && (
+            <p className="mt-0.5 text-xs tabular-nums text-ink-subtle">
+              Next in {nextCheck}
+            </p>
+          )}
         </div>
         <div className="bg-surface p-4">
-          <p className="text-xs uppercase tracking-wide text-ink-faint">Response time</p>
+          <p className="text-xs text-ink-subtle">Response time</p>
           <p className="mt-1 text-sm font-medium tabular-nums text-ink">
-            {site.status.latency_ms !== null ? `${site.status.latency_ms} ms` : "—"}
+            {site.status.latency_ms !== null ? `${site.status.latency_ms} ms` : "-"}
           </p>
         </div>
         <div className="bg-surface p-4">
-          <p className="text-xs uppercase tracking-wide text-ink-faint">Status code</p>
+          <p className="text-xs text-ink-subtle">Status code</p>
           <p
             className={`mt-1 text-sm font-medium tabular-nums ${
               site.status.status_code && site.status.status_code >= 400 ? "text-down" : "text-ink"
             }`}
           >
-            {site.status.status_code ?? "—"}
+            {site.status.status_code ?? "-"}
           </p>
         </div>
         <div className="bg-surface p-4">
-          <p className="text-xs uppercase tracking-wide text-ink-faint">Check frequency</p>
+          <p className="text-xs text-ink-subtle">Check frequency</p>
           <p className="mt-1 text-sm font-medium text-ink">{formatFrequency(site.check_frequency_minutes)}</p>
         </div>
       </div>
-
-      <Card padding="none">
-        <CardHeader title="Settings" />
-        <CardBody>
-          {/* Remount on every successful update: the backend trims/normalizes
-              fields (e.g. name), and SiteForm's local state is only seeded from
-              initialValues on mount - without a fresh key, a save would leave
-              the un-normalized text on screen with "Save changes" stuck enabled. */}
-          <SiteForm key={site.updated_at} mode="edit" initialValues={formValues} onSubmit={handleUpdate} />
-        </CardBody>
-      </Card>
-
-      <Card padding="none" className="border-down-hairline">
-        <CardHeader title={<span className="text-down">Danger zone</span>} />
-        <CardBody className="space-y-3">
-          <p className="text-sm text-ink-subtle">
-            Deleting removes this site and all of its check history. This cannot be undone.
-          </p>
-          {deleteError && <Alert tone="error">{deleteError}</Alert>}
-          <Button type="button" variant="danger" onClick={handleDelete}>
-            Delete site
-          </Button>
-        </CardBody>
-      </Card>
+      </div>
 
       <Card padding="none">
         <CardHeader title="Check history" />
@@ -415,12 +410,13 @@ export default function SiteDetailPage() {
           </div>
         )}
         <HistoryTable
-          records={[...records].reverse()}
+          records={reversedRecords}
           nextCursor={nextCursor}
           onLoadMore={() => historyWindow && nextCursor && loadHistory(historyWindow, nextCursor)}
           loadingMore={historyLoading}
         />
       </Card>
+
     </div>
   );
 }

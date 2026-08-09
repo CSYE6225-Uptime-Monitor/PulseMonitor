@@ -12,18 +12,18 @@ override.tf.json
 tfplan
 *.tfplan
 
-# Local variable files (may hold environment-specific values) — keep the example.
+# Local variable files (may hold environment-specific values) - keep the example.
 *.tfvars
 *.tfvars.json
 !*.tfvars.example
 
 # environments/ holds the committed, canonical config for each deployed
-# environment — CI applies these, so they must be version-controlled. They
+# environment - CI applies these, so they must be version-controlled. They
 # deliberately contain no secrets. See environments/dev.tfvars.
 !environments/
 !environments/*.tfvars
 
-# Backend partial-config with real values — keep the example.
+# Backend partial-config with real values - keep the example.
 backend.hcl
 !backend.hcl.example
 

@@ -9,4 +9,5 @@ export * from "./Input";
 export * from "./PageHeader";
 export * from "./Select";
 export * from "./Skeleton";
+export * from "./Modal";
 export * from "./Table";

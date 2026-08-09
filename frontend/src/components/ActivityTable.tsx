@@ -29,7 +29,7 @@ export function ActivityTable({ events, nextCursor, onLoadMore, loadingMore = fa
             <TR key={event.event_id}>
               <TD strong>{new Date(event.occurred_at).toLocaleString()}</TD>
               <TD>{ACTIVITY_EVENT_LABELS[event.event_type] ?? event.event_type}</TD>
-              <TD>{event.resource_id ?? "—"}</TD>
+              <TD>{event.resource_id ?? "-"}</TD>
               <TD data-outcome={event.outcome}>
                 <Badge tone={event.outcome === "success" ? "neutral" : "down"} dot={event.outcome === "failure"}>
                   {event.outcome === "success" ? "Success" : "Failed"}

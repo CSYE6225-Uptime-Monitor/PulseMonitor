@@ -28,7 +28,7 @@ export default function SignupPage() {
       await signup(form);
       router.push("/dashboard");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      setError(err instanceof ApiError ? err.message : "Couldn't create your account. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -45,43 +45,47 @@ export default function SignupPage() {
         {error && <Alert tone="error">{error}</Alert>}
 
         <div className="grid grid-cols-2 gap-3">
-          <Field htmlFor="first_name" label="First name">
+          <Field htmlFor="first_name" label="First name" required>
             <Input
               id="first_name"
               name="first_name"
               required
+              autoComplete="given-name"
               value={form.first_name}
               onChange={(e) => setForm({ ...form, first_name: e.target.value })}
             />
           </Field>
-          <Field htmlFor="last_name" label="Last name">
+          <Field htmlFor="last_name" label="Last name" required>
             <Input
               id="last_name"
               name="last_name"
               required
+              autoComplete="family-name"
               value={form.last_name}
               onChange={(e) => setForm({ ...form, last_name: e.target.value })}
             />
           </Field>
         </div>
 
-        <Field htmlFor="email" label="Email">
+        <Field htmlFor="email" label="Email" required>
           <Input
             id="email"
             name="email"
             type="email"
             required
+            autoComplete="email"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
         </Field>
 
-        <Field htmlFor="password" label="Password">
+        <Field htmlFor="password" label="Password" required>
           <Input
             id="password"
             name="password"
             type="password"
             required
+            autoComplete="new-password"
             minLength={8}
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}

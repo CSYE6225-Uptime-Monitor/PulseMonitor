@@ -1,7 +1,7 @@
 name: terraform
 
 # Validates the PulseMonitor infrastructure on every change.
-# Scaffolding sprint: format, validate, and test only — no init against a real
+# Scaffolding sprint: format, validate, and test only - no init against a real
 # backend, no plan/apply, no AWS credentials required.
 
 on:

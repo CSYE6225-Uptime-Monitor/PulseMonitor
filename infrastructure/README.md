@@ -7,13 +7,13 @@ Terraform for the PulseMonitor AWS deployment (region `us-east-1`, domain
 
 | Module | Status |
 |---|---|
-| `network` | Implemented — VPC, 2-AZ public/private subnets, IGW, NAT per AZ, ALB/app security groups |
-| `storage` | Implemented — `users` + `sites` DynamoDB tables, 3 S3 buckets (user-data, audit-logs, monitoring-history) |
-| `monitoring` | Implemented — pinger Lambda (`lambda/pinger/`), EventBridge 5-minute schedule, least-privilege IAM, CloudWatch log group |
-| `compute` | Implemented — ALB, target group, HTTP/HTTPS-ready listeners, launch template (Packer AMI), ASG with instance refresh, EC2 instance role |
-| `dns` | Implemented, off by default — Route 53 zone, DNS-validated ACM cert (apex + www), alias records, SES DKIM/SPF/DMARC, optional WAFv2. Gated by `enable_dns` / `enable_https` / `enable_waf`; see [HTTPS rollout](#https-rollout) below. |
-| Alerts (SNS + CloudWatch alarms) | Deferred to Sprint 4 — lands as an additive `modules/monitoring/alerts.tf`, gated by `enable_alerts`. |
-| Notifications (per-owner down/recovery email) | Implemented, off by default — custom EventBridge bus, notifier Lambda (`lambda/notifier/`), SES domain identity. Gated by `enable_notifications`; see [Site notifications](#site-notifications) below. |
+| `network` | Implemented - VPC, 2-AZ public/private subnets, IGW, NAT per AZ, ALB/app security groups |
+| `storage` | Implemented - `users` + `sites` DynamoDB tables, 3 S3 buckets (user-data, audit-logs, monitoring-history) |
+| `monitoring` | Implemented - pinger Lambda (`lambda/pinger/`), EventBridge 5-minute schedule, least-privilege IAM, CloudWatch log group |
+| `compute` | Implemented - ALB, target group, HTTP/HTTPS-ready listeners, launch template (Packer AMI), ASG with instance refresh, EC2 instance role |
+| `dns` | Implemented, off by default - Route 53 zone, DNS-validated ACM cert (apex + www), alias records, SES DKIM/SPF/DMARC, optional WAFv2. Gated by `enable_dns` / `enable_https` / `enable_waf`; see [HTTPS rollout](#https-rollout) below. |
+| Alerts (SNS + CloudWatch alarms) | Deferred to Sprint 4 - lands as an additive `modules/monitoring/alerts.tf`, gated by `enable_alerts`. |
+| Notifications (per-owner down/recovery email) | Implemented, off by default - custom EventBridge bus, notifier Lambda (`lambda/notifier/`), SES domain identity. Gated by `enable_notifications`; see [Site notifications](#site-notifications) below. |
 
 ## Layout
 
@@ -97,8 +97,8 @@ check) - see `lambda/pinger/lib/events.js`. `Source: "pulsemonitor.pinger"`,
 Two rules consume this: `site-down` matches `status: ["down"]` (deliberately
 not constraining `previous_status`, so a newly added site that's already
 down still alerts), and `site-recovered` matches `status: ["up"]` **and**
-`previous_status: ["down"]` (so a brand-new site's first successful check —
-where `previous_status` is JSON `null` — never triggers a false "recovered"
+`previous_status: ["down"]` (so a brand-new site's first successful check -
+where `previous_status` is JSON `null` - never triggers a false "recovered"
 email).
 
 ## Port chain (compute)
@@ -290,7 +290,7 @@ test (backend, frontend, pinger, notifier)
 Rolling out a new AMI is handled by AWS, not the workflow: `data.aws_ami.app`
 picks the newest image tagged `Application=pulsemonitor-backend`, which changes
 the launch template, which triggers the ASG's `instance_refresh` (Rolling,
-`min_healthy_percentage = 50`, `auto_rollback = true`) — one instance at a
+`min_healthy_percentage = 50`, `auto_rollback = true`) - one instance at a
 time, rolled back automatically if the new one fails its health check.
 
 A `concurrency` group serialises deploys: two applies against one state file
@@ -324,14 +324,14 @@ kept in case the org policy changes and OIDC becomes usable again.
 ### Environment configuration
 
 `environments/dev.tfvars` is **committed** and is the single source of truth for
-what is deployed — CI and humans both pass it explicitly:
+what is deployed - CI and humans both pass it explicitly:
 
 ```bash
 terraform apply -var-file=environments/dev.tfvars
 ```
 
 It is deliberately not named `terraform.tfvars`, for two reasons. A gitignored
-`terraform.tfvars` would leave CI applying variable *defaults* — and
+`terraform.tfvars` would leave CI applying variable *defaults* - and
 `enable_notifications` (and now `enable_dns` / `enable_https` / `enable_waf`)
 default to `false`, so the first automated deploy would destroy the whole
 notification and DNS stack. It is also auto-loaded by `terraform test`, which

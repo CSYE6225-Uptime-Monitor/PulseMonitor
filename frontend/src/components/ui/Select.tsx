@@ -8,7 +8,7 @@ export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 const SELECT_BASE =
   "block h-10 w-full appearance-none rounded-control border border-hairline-strong " +
   "bg-surface pl-3 pr-9 text-sm text-ink shadow-control transition-colors " +
-  "hover:border-ink-faint focus-ring disabled:cursor-not-allowed disabled:bg-surface-subtle";
+  "hover:border-ink-subtle focus-ring disabled:cursor-not-allowed disabled:bg-surface-subtle";
 
 export function Select({ invalid, className, children, ...rest }: SelectProps) {
   return (
