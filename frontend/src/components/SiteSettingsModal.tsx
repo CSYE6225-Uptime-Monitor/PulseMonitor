@@ -85,7 +85,7 @@ export function SiteSettingsModal({ site, onUpdate, onDelete }: SiteSettingsModa
         <GearIcon />
       </button>
 
-      <Modal open={open} onClose={handleClose} title={`Settings — ${site.name}`}>
+      <Modal open={open} onClose={handleClose} title={`Settings - ${site.name}`}>
         {/* Remount form on open so local state resets cleanly each time */}
         <SiteForm key={open ? site.updated_at : "closed"} mode="edit" initialValues={formValues} onSubmit={handleUpdate} />
 

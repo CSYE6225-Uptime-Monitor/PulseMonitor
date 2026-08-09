@@ -7,11 +7,12 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Card, CardBody } from "@/components/ui";
 import type { UptimeBucket } from "@/lib/uptime";
 
-// Mirrors primary Button styling - works on an <a> element
+// Mirrors primary Button styling - works on an <a> element. Flat fill, no
+// drop shadow - the shadow read as generic "AI SaaS button" gloss.
 const PRIMARY_LINK_CLS =
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-control " +
-  "h-10 px-4 text-sm font-medium bg-accent text-white shadow-control " +
-  "transition-colors hover:bg-accent-hover active:bg-accent-active focus-ring";
+  "h-10 px-4 text-sm font-semibold bg-ink text-white " +
+  "transition-colors hover:bg-ink-muted active:bg-ink focus-ring";
 
 // ─── demo data for hero UptimeBar (all green) ─────────────────────────────────
 const now = Date.now();
@@ -67,9 +68,6 @@ export function Landing() {
             >
               Log in
             </Link>
-            <Link href="/signup" className={PRIMARY_LINK_CLS}>
-              Start monitoring
-            </Link>
           </nav>
         </div>
       </header>
@@ -99,12 +97,6 @@ export function Landing() {
                   className={`${PRIMARY_LINK_CLS} h-12 px-6 text-base`}
                 >
                   Start monitoring - it&apos;s free
-                </Link>
-                <Link
-                  href="/login"
-                  className="focus-ring rounded-xs text-sm font-medium text-ink-subtle transition-colors hover:text-ink"
-                >
-                  Log in
                 </Link>
               </div>
             </div>
@@ -308,22 +300,8 @@ export function Landing() {
               <Wordmark size="md" />
               <p className="text-xs text-ink-subtle">Uptime monitoring with email alerts.</p>
             </div>
-            <div className="flex items-center gap-4">
-              <Link
-                href="/login"
-                className="focus-ring rounded-xs text-xs text-ink-subtle transition-colors hover:text-ink"
-              >
-                Log in
-              </Link>
-              <Link
-                href="/signup"
-                className="focus-ring rounded-xs text-xs text-ink-subtle transition-colors hover:text-ink"
-              >
-                Sign up
-              </Link>
-            </div>
+            <p className="text-xs text-ink-faint">© 2026 PulseMonitor</p>
           </div>
-          <p className="mt-6 text-xs text-ink-faint">© 2026 PulseMonitor</p>
         </div>
       </footer>
     </div>

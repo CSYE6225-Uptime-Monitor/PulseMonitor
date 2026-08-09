@@ -30,7 +30,7 @@ describe("UptimeBar", () => {
     const buckets = [bucket("up", "a"), bucket("down", "b"), bucket("partial", "c"), bucket("empty", "d")];
     render(<UptimeBar buckets={buckets} axisLabels={["09:00"]} summary="Uptime chart summary" />);
     const strip = screen.getByRole("img", { name: "Uptime chart summary" });
-    const bars = Array.from(strip.children);
+    const bars = Array.from(strip.children).map((wrapper) => wrapper.firstElementChild as HTMLElement);
     expect(bars[0].className).toContain("bg-up-bar");
     expect(bars[1].className).toContain("bg-down-bar");
     expect(bars[2].className).toContain("bg-partial-bar");
